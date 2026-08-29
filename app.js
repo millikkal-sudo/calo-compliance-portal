@@ -940,10 +940,10 @@ document.getElementById("exportPdfTop").addEventListener("click", exportPDF);
 function openGmailDraft(items) {
   if (!items.length) { showToast("No alerts due."); return; }
   const to      = state.settings.managerEmail || "";
-  const subject = encodeURIComponent(`UAE Kitchen Certificate Alert - ${items.length} item(s) need attention`);
+  const subject = encodeURIComponent(`${MARKET} Kitchen Certificate Alert - ${items.length} item(s) need attention`);
   const lines   = ["Hello,","",`The following ${items.length} certificate renewal(s) require attention:`,"",
     ...items.map(i=>`• ${i.employeeName} (${i.employeeId}) · ${i.certType}: ${i.status}`+(i.expiryDate?` · Expires: ${fmtDate(i.expiryDate)}`:"")+(i.daysLeft!==null?` · ${fmtDays(i.daysLeft)}`:"")),
-    "","Please arrange renewals and update the portal once new certificates are issued.","","UAE Kitchen - Compliance Portal"];
+    "","Please arrange renewals and update the portal once new certificates are issued.","","Calo Compliance Portal - " + MARKET + " Kitchen"];
   window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${subject}&body=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   showToast("Opening Gmail draft…");
 }
@@ -1183,8 +1183,8 @@ function exportPDF() {
 
   // ── Header ──────────────────────────────────────────────────────────────────
   doc.setFont("helvetica","bold");doc.setFontSize(20);doc.setTextColor(17,24,39);doc.text("CALO",margin,y);
-  doc.setFontSize(11);doc.setFont("helvetica","normal");doc.setTextColor(107,114,128);doc.text("UAE Kitchen Compliance Portal",margin,y+16);
-  doc.setFontSize(14);doc.setFont("helvetica","bold");doc.setTextColor(17,24,39);doc.text("Staff Certificate Compliance Report",margin,y+40);
+  doc.setFontSize(11);doc.setFont("helvetica","normal");doc.setTextColor(107,114,128);doc.text((MARKET_CONFIG[MARKET] ? MARKET_CONFIG[MARKET].navLabel : MARKET) + " Compliance Portal",margin,y+16);
+  doc.setFontSize(14);doc.setFont("helvetica","bold");doc.setTextColor(17,24,39);doc.text("Staff Certificate Compliance Report -- " + MARKET,margin,y+40);
   doc.setFontSize(9);doc.setFont("helvetica","normal");doc.setTextColor(107,114,128);doc.text(`Generated: ${fmtDate(today())}`,margin,y+56);y+=80;
 
   // ── Collect data ─────────────────────────────────────────────────────────────
