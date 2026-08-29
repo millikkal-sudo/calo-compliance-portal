@@ -3,13 +3,10 @@ const SUPABASE_URL  = "https://iflquskysqchhbywvmow.supabase.co";
 const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmbHF1c2t5c3FjaGhieXd2bW93Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NjM3ODIsImV4cCI6MjA5NzQzOTc4Mn0.FFcd80AqZ8hpyi-Bs_rPnCNZNp075YqBYM1yAYeyGUw";
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+// -- Constants ---------------------------------------------------------------
 const SUPABASE_BUCKET = "certificates";
 const MAX_FILE_BYTES  = 5 * 1024 * 1024;
 
-// ── Market config ─────────────────────────────────────────────────────────────
-// MARKET is determined at login from user_roles table — not hardcoded.
-// All users share one URL. UAE users see UAE data only, Qatar sees Qatar only.
 const MARKET_CONFIG = {
   UAE: {
     certificates: {
@@ -22,7 +19,6 @@ const MARKET_CONFIG = {
     linkedTypes:    ["fsc", "fac"],
     universalTypes: ["bfs", "ohc"],
     navLabel:       "UAE Kitchen",
-    settingsId:     1,
   },
   Qatar: {
     certificates: {
@@ -34,17 +30,12 @@ const MARKET_CONFIG = {
     linkedTypes:    [],
     universalTypes: ["fh", "fa", "fs"],
     navLabel:       "Qatar Kitchen",
-    settingsId:     2,
   },
 };
 
-// Set dynamically by applyMarket() after login
-let MARKET          = null;
-let CERTIFICATES    = {};
-let CERT_TYPES      = [];
-let SECTION_SUFFIX  = {};
-let LINKED_TYPES    = [];
-let UNIVERSAL_TYPES = [];
+let MARKET = null, CERTIFICATES = {}, CERT_TYPES = [], SECTION_SUFFIX = {}, LINKED_TYPES = [], UNIVERSAL_TYPES = [];
+const EDITOR_EMAILS = [];
+const OPS_EMAILS    = [];
 
 function applyMarket(market) {
   MARKET          = market;
@@ -54,41 +45,32 @@ function applyMarket(market) {
   SECTION_SUFFIX  = cfg.sectionSuffix;
   LINKED_TYPES    = cfg.linkedTypes;
   UNIVERSAL_TYPES = cfg.universalTypes;
-  // Update all market labels in the UI
-  document.querySelectorAll(".market-label").forEach(el => el.textContent = cfg.navLabel);
-  document.title = "Calo Compliance Portal — " + cfg.navLabel;
-  // Show only cert nav tabs for this market
-  document.querySelectorAll(".nav-tab[data-view]").forEach(tab => {
-    const view = tab.dataset.view;
-    if (["dashboard","alerts"].includes(view)) { tab.classList.remove("hidden"); return; }
-    tab.classList.toggle("hidden", !CERT_TYPES.includes(view));
+  document.querySelectorAll(".market-label").forEach(function(el) { el.textContent = cfg.navLabel; });
+  document.title = "Calo Compliance Portal";
+  document.querySelectorAll(".nav-tab[data-view]").forEach(function(tab) {
+    var view = tab.dataset.view;
+    if (view === "dashboard" || view === "alerts") { tab.classList.remove("hidden"); return; }
+    tab.classList.toggle("hidden", CERT_TYPES.indexOf(view) === -1);
   });
-  // Show only cert sections in the main content
-  document.querySelectorAll(".view[id]").forEach(v => {
-    const id = v.id;
-    if (["dashboard","alerts"].includes(id)) { v.classList.remove("cert-view-hidden"); return; }
-    if (CERT_TYPES.includes(id)) { v.classList.remove("cert-view-hidden"); }
-    else { v.classList.add("cert-view-hidden"); }
+  document.querySelectorAll(".view[id]").forEach(function(v) {
+    var id = v.id;
+    if (id === "dashboard" || id === "alerts") { v.classList.remove("cert-view-hidden"); return; }
+    CERT_TYPES.indexOf(id) !== -1 ? v.classList.remove("cert-view-hidden") : v.classList.add("cert-view-hidden");
   });
-  // Toggle dashboard overview panels per market
-  const allCertTypes = ["bfs","ohc","fsc","fac","fh","fa","fs"];
-  allCertTypes.forEach(t => {
-    const panel = document.getElementById(t + "Overview");
-    if (panel) panel.classList.toggle("cert-view-hidden", !CERT_TYPES.includes(t));
-    // Also toggle the main cert-overview-panel sections for UAE types
-    const overviewPanel = document.querySelector(\`.cert-overview-panel:has(#\${t}ValidMetric)\`);
-    if (overviewPanel) overviewPanel.classList.toggle("cert-view-hidden", !CERT_TYPES.includes(t));
+  ["bfs","ohc","fsc","fac","fh","fa","fs"].forEach(function(t) {
+    var p = document.getElementById(t + "Overview");
+    if (p) p.classList.toggle("cert-view-hidden", CERT_TYPES.indexOf(t) === -1);
   });
 }
 
 function hasCertData(emp, type) {
-  const r = emp.certificates?.[type] || {};
+  var r = (emp.certificates && emp.certificates[type]) || {};
   return Boolean(r.issueDate || r.expiryDate || r.file || r.scheduledDate);
 }
 function certApplies(emp, type) {
-  if (LINKED_TYPES.includes(type)) return LINKED_TYPES.some(t => hasCertData(emp, t));
-  if (UNIVERSAL_TYPES.includes(type)) {
-    return UNIVERSAL_TYPES.some(t => hasCertData(emp, t)) || !LINKED_TYPES.some(t => hasCertData(emp, t));
+  if (LINKED_TYPES.indexOf(type) !== -1) return LINKED_TYPES.some(function(t) { return hasCertData(emp, t); });
+  if (UNIVERSAL_TYPES.indexOf(type) !== -1) {
+    return UNIVERSAL_TYPES.some(function(t) { return hasCertData(emp, t); }) || !LINKED_TYPES.some(function(t) { return hasCertData(emp, t); });
   }
   return hasCertData(emp, type);
 }
@@ -134,23 +116,18 @@ document.getElementById("togglePw").addEventListener("click", () => {
 
 async function onSignIn(user) {
   session = user;
-
-  // Fetch market + role from user_roles — 3 second timeout so login never hangs
-  let market = "UAE", role = null;
+  var market = "UAE", role = null;
   try {
-    const timeout = new Promise(r => setTimeout(() => r({ data: null }), 3000));
-    const query   = sb.from("user_roles").select("market, role").eq("user_id", user.id).maybeSingle();
-    const { data } = await Promise.race([query, timeout]);
-    if (data?.market) market = data.market;
-    role = data?.role || null;
-  } catch(e) { /* fallback to UAE */ }
-
-  // Global admin defaults to UAE view
+    var timeoutP = new Promise(function(res) { setTimeout(function() { res({data:null}); }, 3000); });
+    var queryP   = sb.from("user_roles").select("market, role").eq("user_id", user.id).maybeSingle();
+    var result   = await Promise.race([queryP, timeoutP]);
+    if (result && result.data && result.data.market) market = result.data.market;
+    if (result && result.data && result.data.role)   role   = result.data.role;
+  } catch(e) {}
   if (role === "global_admin") market = "UAE";
-
   isEditor = (role === "admin");
+  isOps    = (role === "viewer");
   applyMarket(market);
-  isOps    = !isEditor && OPS_EMAILS.includes(user.email.toLowerCase());
   setSyncState("syncing");
   await loadFromSupabase();
   render();
@@ -199,7 +176,7 @@ async function loadFromSupabase() {
   } catch(err) {
     console.error("loadFromSupabase:", err);
     setSyncState("error");
-    showToast("Could not load data — check connection.");
+    showToast("Could not load data -- check connection.");
   }
 }
 
@@ -247,7 +224,7 @@ async function upsertCertificate(empStateId, type, cert, existingCertId) {
   }
 
   const payload = {
-    employee_id:    realEmpId, type, market: MARKET, market: MARKET,
+    employee_id: realEmpId, type, market: MARKET, market: MARKET,
     issue_date:     cert.issueDate     || null,
     expiry_date:    cert.expiryDate    || null,
     file_name:      cert.file?.name     || null,
@@ -264,8 +241,8 @@ async function upsertCertificate(empStateId, type, cert, existingCertId) {
   return data.id;
 }
 
-// Upload file to Supabase Storage — returns { filePath, publicUrl } or throws
-// empCode = the text employee ID like "CK-1024" — used as folder name in storage
+// Upload file to Supabase Storage -- returns { filePath, publicUrl } or throws
+// empCode = the text employee ID like "CK-1024" -- used as folder name in storage
 // so paths are stable and human-readable regardless of DB UUID changes
 async function uploadFileToStorage(empCode, type, file) {
   if (file.size > MAX_FILE_BYTES) throw new Error(`File too large (max 5 MB). "${file.name}" is ${(file.size/1024/1024).toFixed(1)} MB.`);
@@ -293,12 +270,12 @@ function setSyncState(s) {
   syncLabel.textContent = s === "syncing" ? "Saving…" : s === "error" ? "Save failed" : "Saved";
 }
 
-// ── readCertFile — reads File object, uploads to Storage, returns cert file obj ─
+// ── readCertFile -- reads File object, uploads to Storage, returns cert file obj ─
 // empCode = text employee ID like "CK-1024" used as storage folder
 async function readCertFile(file, empCode, type) {
   if (!file) return null;
   if (file.type !== "application/pdf" && !file.type.startsWith("image/")) { showToast("Upload a PDF or image."); throw new Error("bad type"); }
-  if (file.size > MAX_FILE_BYTES) { showToast(`File too large — max 5 MB.`); throw new Error("too large"); }
+  if (file.size > MAX_FILE_BYTES) { showToast(`File too large -- max 5 MB.`); throw new Error("too large"); }
 
   // Always get a local dataUrl for immediate preview
   const dataUrl = await toDataUrl(file);
@@ -312,9 +289,9 @@ async function readCertFile(file, empCode, type) {
   return { name: file.name, type: file.type, size: file.size, dataUrl, filePath, uploadedAt: new Date().toISOString() };
 }
 
-// ── fileLink — renders a download/view link ───────────────────────────────────
+// ── fileLink -- renders a download/view link ───────────────────────────────────
 function fileLink(f) {
-  if (!f) return '<span class="muted">—</span>';
+  if (!f) return '<span class="muted">--</span>';
   // Prefer public Storage URL, fall back to dataUrl (local session only)
   const href = f.filePath
     ? sb.storage.from(SUPABASE_BUCKET).getPublicUrl(f.filePath).data.publicUrl
@@ -339,7 +316,7 @@ const certUploadModalForm = document.getElementById("certUploadModalForm");
 
 function openCertModal(empId, type) {
   const emp = state.employees.find(x => x.id === empId); if (!emp) return;
-  document.getElementById("certUploadModalTitle").textContent = `Upload ${CERTIFICATES[type].label} – ${emp.name}`;
+  document.getElementById("certUploadModalTitle").textContent = `Upload ${CERTIFICATES[type].label} - ${emp.name}`;
   certUploadModalForm.elements.employeeId.value = empId;
   certUploadModalForm.elements.type.value       = type;
   certUploadModalForm.elements.issueDate.value  = emp.certificates[type]?.issueDate  || "";
@@ -404,7 +381,7 @@ function openScheduleModal(empId, type) {
   if (!canSchedule()) return;
   const emp = state.employees.find(x => x.id === empId); if (!emp) return;
   const cert = emp.certificates[type] || {};
-  document.getElementById("scheduleModalTitle").textContent = `Schedule ${CERTIFICATES[type].label} Renewal – ${emp.name}`;
+  document.getElementById("scheduleModalTitle").textContent = `Schedule ${CERTIFICATES[type].label} Renewal - ${emp.name}`;
   scheduleModalForm.elements.employeeId.value   = empId;
   scheduleModalForm.elements.type.value         = type;
   scheduleModalForm.elements.scheduleNote.value = cert.scheduleNote || "";
@@ -425,13 +402,13 @@ function openScheduleModal(empId, type) {
     dateInput.required = false; slotSelect.required = true;
     const slots = upcomingSlots();
     if (!slots.length) {
-      slotSelect.innerHTML = `<option value="">No dates available — contact HR</option>`;
+      slotSelect.innerHTML = `<option value="">No dates available -- contact HR</option>`;
     } else {
       slotSelect.innerHTML = [`<option value="">Select a date…</option>`, ...slots.map(sl => {
         const booked  = slotBookedCount(sl.date);
         const isCurrent = cert.scheduledDate === sl.date;
         const full    = booked >= sl.capacity && !isCurrent;
-        const txt = `${fmtDate(sl.date)}${sl.label ? ` — ${escHtml(sl.label)}` : ""} (${booked}/${sl.capacity}${full ? " FULL" : ""})`;
+        const txt = `${fmtDate(sl.date)}${sl.label ? ` -- ${escHtml(sl.label)}` : ""} (${booked}/${sl.capacity}${full ? " FULL" : ""})`;
         return `<option value="${sl.date}" ${full ? "disabled" : ""} ${isCurrent ? "selected" : ""}>${txt}</option>`;
       })].join("");
     }
@@ -528,7 +505,7 @@ async function deleteSlot(id) {
   const slot = state.slots.find(sl => sl.id === id); if (!slot) return;
   const booked = slotBookedCount(slot.date);
   const msg = booked
-    ? `Remove ${fmtDate(slot.date)}? ${booked} employee(s) are scheduled on this date — their schedules will be KEPT, but ops cannot add more to it.`
+    ? `Remove ${fmtDate(slot.date)}? ${booked} employee(s) are scheduled on this date -- their schedules will be KEPT, but ops cannot add more to it.`
     : `Remove ${fmtDate(slot.date)} from the schedule dates?`;
   if (!confirm(msg)) return;
   setSyncState("syncing");
@@ -552,7 +529,7 @@ function renderSlots() {
     const full   = booked >= sl.capacity;
     const badgeTxt = past ? "past" : (full ? "FULL" : `${booked}/${sl.capacity}`);
     return `<div class="slot-item ${past ? "slot-past" : ""}">
-      <div><strong>${fmtDate(sl.date)}</strong>${sl.label ? ` <span class="muted">— ${escHtml(sl.label)}</span>` : ""}</div>
+      <div><strong>${fmtDate(sl.date)}</strong>${sl.label ? ` <span class="muted">-- ${escHtml(sl.label)}</span>` : ""}</div>
       <span class="slot-count ${full && !past ? "slot-full" : ""}">${badgeTxt}</span>
       <button class="text-btn danger" data-action="del-slot" data-id="${sl.id}" type="button">Remove</button>
     </div>`;
@@ -681,7 +658,7 @@ function initSection(type) {
       const count = await applyBulkFiles(bulkRows, type);
       hideProgressToast();
       setSyncState("idle"); renderAll();
-      showToast(count > 0 ? `✅ ${count} ${CERTIFICATES[type].label} file(s) attached successfully.` : `⚠️ No files were attached — check console for errors.`);
+      showToast(count > 0 ? `✅ ${count} ${CERTIFICATES[type].label} file(s) attached successfully.` : `⚠️ No files were attached -- check console for errors.`);
     } catch(err) {
       hideProgressToast();
       setSyncState("error");
@@ -739,7 +716,7 @@ function showCertEdit(empId, type) {
   const emp = state.employees.find(x => x.id === empId); if (!emp) return;
   const sfx  = SECTION_SUFFIX[type];
   const form = document.getElementById(`certificateForm${sfx}`);
-  document.getElementById(`certEditTitle${sfx}`).textContent = `Edit ${CERTIFICATES[type].label} – ${emp.name}`;
+  document.getElementById(`certEditTitle${sfx}`).textContent = `Edit ${CERTIFICATES[type].label} - ${emp.name}`;
   form.elements.employeeId.value = empId;
   form.elements.issueDate.value  = emp.certificates[type]?.issueDate  || "";
   form.elements.expiryDate.value = emp.certificates[type]?.expiryDate || "";
@@ -797,7 +774,7 @@ The issue date and expiry date will be kept.`
   setSyncState("syncing");
   try {
     if (hasFile) {
-      // Only remove the file — keep issue date and expiry date
+      // Only remove the file -- keep issue date and expiry date
       const oldPath = e.certificates[type].file.filePath;
       if (oldPath) await deleteStorageFile(oldPath);
       e.certificates[type] = {
@@ -812,7 +789,7 @@ The issue date and expiry date will be kept.`
       if (error) throw error;
       showToast(`${CERTIFICATES[type].label} file removed. Dates kept.`);
     } else {
-      // No file — wipe the whole cert record (dates only)
+      // No file -- wipe the whole cert record (dates only)
       e.certificates[type] = {};
       await deleteCertFromDb(empId, type);
       if (e._certIds) e._certIds[type] = null;
@@ -866,15 +843,15 @@ function matchFile(fileName) {
   emp = state.employees.find(e => norm(e.name) === nb);
   if (emp) return { employee: emp, how: "name" };
 
-  // 4. First name only — file base matches first word of employee name  (Ahmed.pdf)
+  // 4. First name only -- file base matches first word of employee name  (Ahmed.pdf)
   emp = state.employees.find(e => e.name.trim().toLowerCase().split(/\s+/)[0] === lower);
   if (emp) return { employee: emp, how: "first name" };
 
-  // 5. Employee name STARTS WITH file base  (Ajay.pdf → Ajay Kumar)
+  // 5. Employee name STARTS WITH file base  (Ajay.pdf -> Ajay Kumar)
   emp = state.employees.find(e => norm(e.name).startsWith(nb) && nb.length >= 4);
   if (emp) return { employee: emp, how: "partial" };
 
-  // 6. File base is contained within employee name  (AjayKumar.pdf → Ajay Kumar)
+  // 6. File base is contained within employee name  (AjayKumar.pdf -> Ajay Kumar)
   emp = state.employees.find(e => norm(e.name).includes(nb) && nb.length >= 4);
   if (emp) return { employee: emp, how: "partial" };
 
@@ -893,8 +870,8 @@ function renderPreview(rows, el, type) {
       ? `<span class="${r.already ? "muted" : "status-valid"}">${escHtml(r.match.employee.name)}</span>`
       : `<span class="status-expired">No match</span>`;
     let statusCell;
-    if (!r.match)        statusCell = `<span class="muted">—</span>`;
-    else if (r.already)  statusCell = `<span class="status-expiring">Already uploaded — will skip</span>`;
+    if (!r.match)        statusCell = `<span class="muted">--</span>`;
+    else if (r.already)  statusCell = `<span class="status-expiring">Already uploaded -- will skip</span>`;
     else                 statusCell = `<span class="status-valid">Will upload (${escHtml(r.match.how)})</span>`;
     html += `<tr><td>${escHtml(r.file.name)}</td><td>${matchCell}</td><td>${statusCell}</td></tr>`;
   });
@@ -905,7 +882,7 @@ async function applyBulkFiles(rows, type) {
   const skipped = rows.filter(r => r.match && r.already).length;
   const matched = rows.filter(r => r.match && !r.already);
   if (!matched.length) {
-    showToast(skipped ? `All ${skipped} matched file(s) already uploaded — nothing to do.` : "No files matched any employee ID.");
+    showToast(skipped ? `All ${skipped} matched file(s) already uploaded -- nothing to do.` : "No files matched any employee ID.");
     return 0;
   }
   if (skipped) showToast(`Skipping ${skipped} file(s) already uploaded…`);
@@ -923,12 +900,12 @@ async function applyBulkFiles(rows, type) {
       // Delete old storage file if replacing
       if (emp.certificates[type]?.file?.filePath) await deleteStorageFile(emp.certificates[type].file.filePath);
 
-      // Use employeeId (text code) as the storage folder — not the DB UUID
+      // Use employeeId (text code) as the storage folder -- not the DB UUID
       const fileObj  = await readCertFile(r.file, emp.employeeId, type);
       const certData = { ...(emp.certificates[type] || {}), file: fileObj };
       emp.certificates[type] = certData;
 
-      // Upsert the cert record — upsertCertificate resolves the real DB id internally
+      // Upsert the cert record -- upsertCertificate resolves the real DB id internally
       const certId = await upsertCertificate(emp.id, type, certData, emp._certIds?.[type]);
       if (!emp._certIds) emp._certIds = {};
       emp._certIds[type] = certId;
@@ -936,7 +913,7 @@ async function applyBulkFiles(rows, type) {
     } catch(err) {
       failed++;
       console.error(`Failed to attach ${r.file.name}:`, err.message);
-      showToast(`❌ Failed: ${r.file.name} — ${err.message}`);
+      showToast(`❌ Failed: ${r.file.name} -- ${err.message}`);
       await new Promise(r => setTimeout(r, 1500)); // show error briefly
     }
   }
@@ -963,10 +940,10 @@ document.getElementById("exportPdfTop").addEventListener("click", exportPDF);
 function openGmailDraft(items) {
   if (!items.length) { showToast("No alerts due."); return; }
   const to      = state.settings.managerEmail || "";
-  const subject = encodeURIComponent(`UAE Kitchen Certificate Alert – ${items.length} item(s) need attention`);
+  const subject = encodeURIComponent(`UAE Kitchen Certificate Alert - ${items.length} item(s) need attention`);
   const lines   = ["Hello,","",`The following ${items.length} certificate renewal(s) require attention:`,"",
     ...items.map(i=>`• ${i.employeeName} (${i.employeeId}) · ${i.certType}: ${i.status}`+(i.expiryDate?` · Expires: ${fmtDate(i.expiryDate)}`:"")+(i.daysLeft!==null?` · ${fmtDays(i.daysLeft)}`:"")),
-    "","Please arrange renewals and update the portal once new certificates are issued.","","UAE Kitchen – Compliance Portal"];
+    "","Please arrange renewals and update the portal once new certificates are issued.","","UAE Kitchen - Compliance Portal"];
   window.open(`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${subject}&body=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   showToast("Opening Gmail draft…");
 }
@@ -976,7 +953,7 @@ function render() {
   const ok = Boolean(session?.email);
   loginView.classList.toggle("hidden", ok);
   appShell.classList.toggle("hidden", !ok);
-  document.getElementById("signedInEmail").textContent = session?.email || "—";
+  document.getElementById("signedInEmail").textContent = session?.email || "--";
   if (!ok) return;
   document.querySelectorAll(".editor-only").forEach(el => el.classList.toggle("hidden", !isEditor));
   document.querySelectorAll(".editor-only-col").forEach(el => el.classList.toggle("hidden", !isEditor));
@@ -1002,7 +979,7 @@ function renderDeptFilterOptions() {
 function renderDashboard() {
   const sums   = getCertSummaries();
   const by     = countBy(sums,"status");
-  // Urgent by REAL status — includes scheduled items so they show in the scheduled section below
+  // Urgent by REAL status -- includes scheduled items so they show in the scheduled section below
   const urgent = sums.filter(s=>s.rawStatus==="Expired"||s.rawStatus==="Expiring in 30 Days").sort((a,b)=>a.daysLeft-b.daysLeft);
   const uc     = (by.Expired||0)+(by["Expiring in 30 Days"]||0); // excludes scheduled = still needs action
   // Split urgent into unscheduled (needs action) and scheduled (being handled)
@@ -1015,7 +992,7 @@ function renderDashboard() {
   pill.textContent = uc ? "Action Needed" : "Compliant"; pill.classList.toggle("risk", Boolean(uc));
   CERT_TYPES.forEach(type => {
     const typeSums = state.employees.filter(e=>certApplies(e,type)).map(e=>getCertSummary(e,type));
-    // Count by REAL status (expiry-date based) — scheduling never moves a cert out of these boxes
+    // Count by REAL status (expiry-date based) -- scheduling never moves a cert out of these boxes
     const tb = countBy(typeSums,"rawStatus");
     document.getElementById(`${type}ValidMetric`).textContent   = tb.Valid||0;
     document.getElementById(`${type}NinetyMetric`).textContent  = tb["Expiring in 90 Days"]||0;
@@ -1040,7 +1017,7 @@ function renderDashboard() {
       <td>${escHtml(s.cert.label)}</td>
       <td>${fmtDate(s.expiryDate)}</td>
       <td>${badge(s.status, s.scheduledDate)}</td>
-      <td><span class="schedule-note-inline">${s.scheduleNote ? escHtml(s.scheduleNote) : "—"}</span></td>
+      <td><span class="schedule-note-inline">${s.scheduleNote ? escHtml(s.scheduleNote) : "--"}</span></td>
     </tr>`),
   ];
   setRows("attentionRows", allDashRows, 5, "No urgent renewals.");
@@ -1141,27 +1118,20 @@ async function importFromCsv(text) {
   showProgressToast("Parsing " + dataRows.length + " rows...", 5);
   const empMap = new Map();
   let skipped = 0, addedCount = 0, updatedCount = 0;
-
   for (const raw of dataRows) {
     const row = [...raw]; while (row.length < hdrs.length) row.push("");
     const empId = getCol(row,"employeeid"), name = getCol(row,"name"), dept = getCol(row,"department");
     if (!empId || !name || !dept) { skipped++; continue; }
-    // Parse cert dates for whichever market we're in
     const certDates = {};
-    CERT_TYPES.forEach(t => {
-      const d = parseDate(getCol(row, t + "issuedate"));
-      if (d) certDates[t] = d;
-    });
+    CERT_TYPES.forEach(t => { const d = parseDate(getCol(row, t + "issuedate")); if (d) certDates[t] = d; });
     const existing = state.employees.find(e => e.employeeId.toLowerCase() === empId.toLowerCase());
     const createdAt = existing?.createdAt || new Date().toISOString();
     const empRow = { name, employee_id: empId, department: dept, market: MARKET, created_at: createdAt, updated_at: new Date().toISOString() };
     empMap.set(empId.toLowerCase(), { empRow, certDates, isNew: !existing });
   }
-
   const allEntries = [...empMap.values()];
   if (!allEntries.length) return { added: 0, updated: 0, skipped };
   allEntries.forEach(e => e.isNew ? addedCount++ : updatedCount++);
-
   const BATCH = 200, empIdToDbId = {};
   showProgressToast("Writing " + allEntries.length + " employees...", 30);
   for (let i = 0; i < allEntries.length; i += BATCH) {
@@ -1173,26 +1143,20 @@ async function importFromCsv(text) {
     if (error) throw new Error("Employee upsert failed: " + error.message);
     (upserted || []).forEach(r => { empIdToDbId[r.employee_id.toLowerCase()] = r.id; });
   }
-
   const certRows = [];
   for (const { empRow, certDates } of allEntries) {
     const realId = empIdToDbId[empRow.employee_id.toLowerCase()];
     if (!realId) continue;
     CERT_TYPES.forEach(type => {
-      if (certDates[type]) {
-        certRows.push({ employee_id: realId, type, market: MARKET,
-          issue_date: certDates[type],
-          expiry_date: calcExpiry(certDates[type], CERTIFICATES[type].validYears),
-          updated_at: new Date().toISOString() });
-      }
+      if (certDates[type]) certRows.push({ employee_id: realId, type, market: MARKET,
+        issue_date: certDates[type], expiry_date: calcExpiry(certDates[type], CERTIFICATES[type].validYears),
+        updated_at: new Date().toISOString() });
     });
   }
-
   if (certRows.length > 0) {
     showProgressToast("Writing " + certRows.length + " certificate records...", 75);
     for (let i = 0; i < certRows.length; i += BATCH) {
-      const { error } = await sb.from("certificates")
-        .upsert(certRows.slice(i, i+BATCH), { onConflict: "employee_id,type" });
+      const { error } = await sb.from("certificates").upsert(certRows.slice(i,i+BATCH), { onConflict: "employee_id,type" });
       if (error) throw new Error("Certificate upsert failed: " + error.message);
     }
   }
@@ -1203,19 +1167,17 @@ async function importFromCsv(text) {
 }
 
 function downloadTemplate(type) {
-  // CSV columns: always include all cert types for this market as optional columns
   const certCols = CERT_TYPES.map(t => t + "IssueDate");
-  const cols = ["employeeId","name","department", ...certCols];
-  const ex   = ["EMP-1001","Sample Employee","Kitchen", ...CERT_TYPES.map(() => "2026-01-15")];
-  const marketSlug = MARKET.toLowerCase().replace(/\s+/g,"-");
-  downloadFile(marketSlug + "-certs-template-" + today() + ".csv",
-    [cols,ex].map(r => r.map(csvEsc).join(",")).join("\n"),
-    "text/csv;charset=utf-8;");
+  const cols = ["employeeId","name","department"].concat(certCols);
+  const ex   = ["EMP-1001","Sample Employee","Kitchen"].concat(CERT_TYPES.map(() => "2026-01-15"));
+  const slug = MARKET.toLowerCase().replace(/\s+/g, "-");
+  downloadFile(slug + "-certs-template-" + today() + ".csv",
+    [cols,ex].map(r => r.map(csvEsc).join(",")).join("\n"), "text/csv;charset=utf-8;");
 }
 
 // ── PDF export ─────────────────────────────────────────────────────────────────
 function exportPDF() {
-  if (!window.jspdf?.jsPDF) { showToast("PDF library still loading — try again."); return; }
+  if (!window.jspdf?.jsPDF) { showToast("PDF library still loading -- try again."); return; }
   const {jsPDF}=window.jspdf, doc=new jsPDF({unit:"pt",format:"a4"});
   const pageW=doc.internal.pageSize.getWidth(), margin=40; let y=50;
 
@@ -1274,7 +1236,7 @@ function exportPDF() {
         s.emp.name, s.emp.employeeId, s.emp.department,
         s.cert.label, s.rawStatus,
         fmtDate(s.scheduledDate),
-        s.scheduleNote||"—"
+        s.scheduleNote||"--"
       ]),
       styles:{fontSize:8,cellPadding:5},
       headStyles:{fillColor:[21,128,61],textColor:255,fontStyle:"bold"},
@@ -1298,7 +1260,7 @@ function exportPDF() {
       body:unhandled.sort((a,b)=>a.daysLeft-b.daysLeft).map(s=>[
         s.emp.name, s.emp.employeeId, s.emp.department,
         s.cert.label, s.rawStatus, fmtDate(s.expiryDate),
-        isFinite(s.daysLeft)?(s.daysLeft<0?`${Math.abs(s.daysLeft)}d overdue`:`${s.daysLeft}d left`):"—"
+        isFinite(s.daysLeft)?(s.daysLeft<0?`${Math.abs(s.daysLeft)}d overdue`:`${s.daysLeft}d left`):"--"
       ]),
       styles:{fontSize:8,cellPadding:5},
       headStyles:{fillColor:[185,28,28],textColor:255,fontStyle:"bold"},
@@ -1313,13 +1275,13 @@ function exportPDF() {
   CERT_TYPES.forEach(t => {
     if(y>580){doc.addPage();y=50;}
     doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(17,24,39);
-    doc.text(`${CERTIFICATES[t].label} — ${CERTIFICATES[t].fullName} (Full Register)`,margin,y);
+    doc.text(`${CERTIFICATES[t].label} -- ${CERTIFICATES[t].fullName} (Full Register)`,margin,y);
     doc.autoTable({
       startY:y+8,margin:{left:margin,right:margin},
       head:[["Name","ID","Department","Status","Issue Date","Expiry Date","Renewal Scheduled"]],
       body:state.employees.filter(e=>certApplies(e,t)).map(e=>{
         const s=getCertSummary(e,t);
-        return[e.name,e.employeeId,e.department,s.status,fmtDate(s.issueDate),fmtDate(s.expiryDate),s.scheduledDate?fmtDate(s.scheduledDate):"—"];
+        return[e.name,e.employeeId,e.department,s.status,fmtDate(s.issueDate),fmtDate(s.expiryDate),s.scheduledDate?fmtDate(s.scheduledDate):"--"];
       }),
       styles:{fontSize:8,cellPadding:4},
       headStyles:{fillColor:registerColors[t]||[55,65,81],textColor:255,fontStyle:"bold"},
@@ -1357,7 +1319,7 @@ function badge(status, scheduledDate=""){
   const cls=status==="Valid"?"good":status==="Expiring in 90 Days"?"watch":status==="Expiring in 30 Days"?"warn":status==="Missing"?"neutral":"bad";
   return`<span class="badge ${cls}">${escHtml(status)}</span>`;
 }
-function fmtDate(v){if(!v)return"—";return new Intl.DateTimeFormat("en-US",{year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(`${v}T00:00:00`));}
+function fmtDate(v){if(!v)return"--";return new Intl.DateTimeFormat("en-US",{year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date(`${v}T00:00:00`));}
 function fmtDays(d){if(!isFinite(d))return"not recorded";if(d<0)return`${Math.abs(d)} days overdue`;if(d===0)return"expires today";return`${d} days remaining`;}
 function escHtml(v){return String(v??"").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;");}
 function escAttr(v){return String(v??"").replace(/'/g,"&#039;").replace(/"/g,"&quot;");}
@@ -1409,7 +1371,7 @@ render(); // show login screen immediately while we check session
 sb.auth.onAuthStateChange(async (event, sbSession) => {
   if (event === "SIGNED_IN" || event === "INITIAL_SESSION") {
     if (sbSession?.user && sbSession.user.id !== session?.id) {
-      // New or restored session — load data and render
+      // New or restored session -- load data and render
       await onSignIn(sbSession.user);
     }
   } else if (event === "SIGNED_OUT" || event === "USER_DELETED") {
