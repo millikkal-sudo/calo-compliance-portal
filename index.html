@@ -1,0 +1,1285 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calo Compliance Portal</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+    /* Unified portal: cert sections hidden until applyMarket() runs */
+    .cert-view-hidden { display: none !important; }
+    .fh-badge  { background: #fef9c3; color: #854d0e; }
+    .fa-badge  { background: #fce7f3; color: #9d174d; }
+    .fs-badge  { background: #ffedd5; color: #9a3412; }
+    .nav-tab.hidden   { display: none !important; }
+  </style>
+</head>
+  <body>
+
+    <!-- ── LOGIN ─────────────────────────────────────────────────────── -->
+    <section id="loginView" class="login-view">
+      <div class="login-bg"></div>
+      <div class="login-shadow"></div>
+      <div class="login-greenwash"></div>
+      <div class="login-panel">
+        <div class="login-brand">
+          <img src="assets/calo-logo.svg" alt="CALO" />
+          <span>Calo Compliance Portal</span>
+          <i></i>
+        </div>
+        <div class="login-copy">
+          <h1>Welcome back</h1>
+          <p>Sign in to manage compliance certificates.</p>
+        </div>
+        <form id="loginForm" class="login-form" autocomplete="on">
+          <label>
+            Email
+            <input id="loginEmail" name="email" type="email" required placeholder="you@calo.app" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <div class="pw-wrap">
+              <input id="loginPassword" name="password" type="password" required placeholder="••••••••" autocomplete="current-password" />
+              <button id="togglePw" class="pw-eye" type="button" tabindex="-1" aria-label="Show password">👁</button>
+            </div>
+          </label>
+          <p id="loginError" class="login-error hidden"></p>
+          <button class="login-submit-btn" type="submit" id="loginSubmitBtn">Sign in</button>
+        </form>
+        <div class="login-footer">
+          <p>© 2026 CALO Food Company · Calo Compliance Portal</p>
+        </div>
+      </div>
+      <div class="login-locations">
+        <span>Dubai</span><span>Compliance</span><span>Portal</span><span>CALO</span>
+      </div>
+    </section>
+
+    <!-- ── APP SHELL ──────────────────────────────────────────────────── -->
+    <div id="appShell" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="brand-row app-brand">
+          <img src="assets/calo-logo.svg" alt="CALO" />
+          <div><strong class="market-label">Calo</strong><span>Compliance Portal</span></div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Main sections">
+          <button class="nav-tab active" data-view="dashboard" type="button">📊 Dashboard</button>
+          <button class="nav-tab" data-view="bfs" type="button">🧪 BFS Certificates</button>
+          <button class="nav-tab" data-view="ohc" type="button">🩺 OHC Certificates</button>
+          <button class="nav-tab" data-view="fsc" type="button">🔥 FSC Certificates</button>
+          <button class="nav-tab" data-view="fac" type="button">⛑ FAC Certificates</button>
+          <button class="nav-tab" data-view="fh"  type="button">🍽 Food Handler</button>
+          <button class="nav-tab" data-view="fa"  type="button">⛑ First Aid</button>
+          <button class="nav-tab" data-view="fs"  type="button">🔥 Fire Safety</button>
+          <button class="nav-tab" data-view="alerts" type="button">🔔 Alerts &amp; Export</button>
+        </nav>
+
+        <div class="sidebar-panel">
+          <span class="eyebrow">Signed in</span>
+          <strong id="signedInEmail">—</strong>
+          <div id="syncStatus" class="sync-status sync-idle">
+            <span class="sync-dot"></span>
+            <span id="syncLabel">Saved</span>
+          </div>
+          <!-- viewer-only badge shown for read-only users -->
+          <div id="viewerBadge" class="viewer-badge hidden">👁 View only</div>
+          <button id="signOutButton" class="ghost-btn" type="button">Sign out</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <span class="eyebrow">HR &amp; Ops</span>
+            <h1>Calo Compliance Portal</h1>
+          </div>
+          <div class="actions">
+            <button id="exportPdfTop" class="primary-btn" type="button">Export PDF</button>
+          </div>
+        </header>
+
+        <!-- ── DASHBOARD ───────────────────────────────────────────── -->
+        <section id="dashboard" class="view active-view">
+          <div class="section-heading">
+            <div>
+              <h2>Certificate Overview</h2>
+              <p>Live status — urgent renewals surfaced first.</p>
+            </div>
+            <div id="overallStatus" class="status-pill">Compliant</div>
+          </div>
+
+          <div class="metric-grid metric-grid-top">
+            <article class="metric"><span>Employees</span><strong id="employeeMetric">0</strong></article>
+            <article class="metric urgent"><span>Action Needed (Expired or ≤30 Days)</span><strong id="urgentMetric">0</strong></article>
+          </div>
+
+          <div class="cert-overview-grid">
+            <section class="panel cert-overview-panel">
+              <div class="panel-heading"><h3><span class="cert-type-badge bfs-badge">BFS</span> Basic Food Safety</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="bfsValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="bfsNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="bfsThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="bfsExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="bfsMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="bfsScheduledMetric">0</strong></div>
+              </div>
+            </section>
+            <section class="panel cert-overview-panel">
+              <div class="panel-heading"><h3><span class="cert-type-badge ohc-badge">OHC</span> Occupational Health Card</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="ohcValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="ohcNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="ohcThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="ohcExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="ohcMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="ohcScheduledMetric">0</strong></div>
+              </div>
+            </section>
+            <section class="panel cert-overview-panel">
+              <div class="panel-heading"><h3><span class="cert-type-badge fsc-badge">FSC</span> Fire Safety Certificate</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="fscValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="fscNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="fscThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="fscExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="fscMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="fscScheduledMetric">0</strong></div>
+              </div>
+            </section>
+            <section class="panel cert-overview-panel">
+              <div class="panel-heading"><h3><span class="cert-type-badge fac-badge">FAC</span> First Aid Certificate</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="facValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="facNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="facThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="facExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="facMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="facScheduledMetric">0</strong></div>
+              </div>
+            </section>
+          </div>
+            <section class="panel cert-overview-panel cert-view-hidden" id="fhOverview">
+              <div class="panel-heading"><h3><span class="cert-type-badge fh-badge">FH</span> Food Handler Certificate</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="fhValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="fhNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="fhThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="fhExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="fhMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="fhScheduledMetric">0</strong></div>
+              </div>
+            </section>
+            <section class="panel cert-overview-panel cert-view-hidden" id="faOverview">
+              <div class="panel-heading"><h3><span class="cert-type-badge fa-badge">FA</span> First Aid Certificate</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="faValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="faNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="faThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="faExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="faMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="faScheduledMetric">0</strong></div>
+              </div>
+            </section>
+            <section class="panel cert-overview-panel cert-view-hidden" id="fsOverview">
+              <div class="panel-heading"><h3><span class="cert-type-badge fs-badge">FS</span> Fire Safety Certificate</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="fsValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="fsNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="fsThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="fsExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="fsMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="fsScheduledMetric">0</strong></div>
+              </div>
+            </section>
+
+          <div class="content-grid">
+            <section class="panel">
+              <div class="panel-heading">
+                <h3>Needs Immediate Attention</h3>
+                <span id="attentionCount" class="record-count">0 items</span>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Employee</th><th>Cert</th><th>Expiry</th><th>Status</th><th>Action</th></tr></thead>
+                  <tbody id="attentionRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading"><h3>Department Risk</h3></div>
+              <div id="departmentRiskList" class="risk-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <!-- ── BFS CERTIFICATES ────────────────────────────────────── -->
+        <section id="bfs" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge bfs-badge">BFS</span> Basic Food Safety</h2><p>Add staff, bulk-upload BFS certificate files, and manage BFS records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleBfs">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertBfs" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
+                  <button id="showBulkUploadBfs" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditBfs" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormBfs" class="employee-quick-form" data-cert-type="bfs">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>BFS Issue Date <input name="bfsIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonBfs" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionBfs" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num bfs-step">BFS</span>
+                    <div>
+                      <strong>Bulk Upload BFS Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputBfs" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderBfs" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewBfs" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsBfs" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmBfs" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearBfs" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionBfs" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, BFS Issue Date.</p>
+                      <button id="downloadEmployeeTemplateBfs" class="secondary-btn" type="button" data-cert-type="bfs">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormBfs" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>BFS Register</h3>
+              <input id="employeeSearchBfs" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterBfs">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterBfs">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsBfs"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelBfs" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleBfs">Edit Certificate</h3>
+              <button id="cancelCertEditBfs" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormBfs" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="bfs" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── OHC CERTIFICATES ────────────────────────────────────── -->
+        <section id="ohc" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge ohc-badge">OHC</span> Occupational Health Card</h2><p>Add staff, bulk-upload OHC certificate files, and manage OHC records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleOhc">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertOhc" class="secondary-btn" type="button">📎 Bulk Upload OHC Files</button>
+                  <button id="showBulkUploadOhc" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditOhc" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormOhc" class="employee-quick-form" data-cert-type="ohc">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>OHC Issue Date <input name="ohcIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonOhc" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionOhc" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num ohc-step">OHC</span>
+                    <div>
+                      <strong>Bulk Upload OHC Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputOhc" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderOhc" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewOhc" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsOhc" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmOhc" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearOhc" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionOhc" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, OHC Issue Date.</p>
+                      <button id="downloadEmployeeTemplateOhc" class="secondary-btn" type="button" data-cert-type="ohc">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormOhc" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>OHC Register</h3>
+              <input id="employeeSearchOhc" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterOhc">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterOhc">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>OHC Status</th><th>OHC Issue</th><th>OHC Expiry</th><th>OHC Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsOhc"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelOhc" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleOhc">Edit Certificate</h3>
+              <button id="cancelCertEditOhc" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormOhc" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="ohc" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── FSC CERTIFICATES ───────────────────────────────────── -->
+        <section id="fsc" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge fsc-badge">FSC</span> Fire Safety Certificate</h2><p>Only selected staff need FSC. Add them here (use their existing Employee ID), bulk-upload their files, and manage FSC records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleFsc">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertFsc" class="secondary-btn" type="button">📎 Bulk Upload FSC Files</button>
+                  <button id="showBulkUploadFsc" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditFsc" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormFsc" class="employee-quick-form" data-cert-type="fsc">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>FSC Issue Date <input name="fscIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonFsc" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionFsc" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num fsc-step">FSC</span>
+                    <div>
+                      <strong>Bulk Upload FSC Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputFsc" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderFsc" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewFsc" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsFsc" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmFsc" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearFsc" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionFsc" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, FSC Issue Date.</p>
+                      <button id="downloadEmployeeTemplateFsc" class="secondary-btn" type="button" data-cert-type="fsc">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormFsc" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>FSC Register</h3>
+              <input id="employeeSearchFsc" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterFsc">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterFsc">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>FSC Status</th><th>FSC Issue</th><th>FSC Expiry</th><th>FSC Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsFsc"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelFsc" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleFsc">Edit Certificate</h3>
+              <button id="cancelCertEditFsc" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormFsc" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="fsc" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── FAC CERTIFICATES ────────────────────────────────────── -->
+        <section id="fac" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge fac-badge">FAC</span> First Aid Certificate</h2><p>Only selected staff need FAC. Add them here (use their existing Employee ID), bulk-upload their files, and manage FAC records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleFac">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertFac" class="secondary-btn" type="button">📎 Bulk Upload FAC Files</button>
+                  <button id="showBulkUploadFac" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditFac" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormFac" class="employee-quick-form" data-cert-type="fac">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>FAC Issue Date <input name="facIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonFac" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionFac" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num fac-step">FAC</span>
+                    <div>
+                      <strong>Bulk Upload FAC Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputFac" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderFac" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewFac" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsFac" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmFac" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearFac" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionFac" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, FAC Issue Date.</p>
+                      <button id="downloadEmployeeTemplateFac" class="secondary-btn" type="button" data-cert-type="fac">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormFac" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>FAC Register</h3>
+              <input id="employeeSearchFac" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterFac">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterFac">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>FAC Status</th><th>FAC Issue</th><th>FAC Expiry</th><th>FAC Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsFac"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelFac" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleFac">Edit Certificate</h3>
+              <button id="cancelCertEditFac" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormFac" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="fac" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── FH CERTIFICATES ────────────────────────────────────── -->
+        <section id="fh" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge fh-badge">FH</span> Food Handler Certificate</h2><p>Add staff, bulk-upload FH certificate files, and manage Food Handler records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleFh">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertFh" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
+                  <button id="showBulkUploadFh" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditFh" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormFh" class="employee-quick-form" data-cert-type="fh">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>BFS Issue Date <input name="fhIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonFh" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionFh" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num bfs-step">FH</span>
+                    <div>
+                      <strong>Bulk Upload BFS Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputFh" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderFh" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewFh" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsFh" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmFh" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearFh" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionFh" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, BFS Issue Date.</p>
+                      <button id="downloadEmployeeTemplateFh" class="secondary-btn" type="button" data-cert-type="fh">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormFh" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>BFS Register</h3>
+              <input id="employeeSearchFh" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterFh">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterFh">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsFh"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelFh" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleFh">Edit Certificate</h3>
+              <button id="cancelCertEditFh" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormFh" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="fh" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── FA CERTIFICATES ────────────────────────────────────── -->
+        <section id="fa" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge fa-badge">FA</span> First Aid Certificate</h2><p>Add staff, bulk-upload FA certificate files, and manage First Aid records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleFa">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertFa" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
+                  <button id="showBulkUploadFa" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditFa" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormFa" class="employee-quick-form" data-cert-type="fa">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>BFS Issue Date <input name="faIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonFa" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionFa" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num bfs-step">FA</span>
+                    <div>
+                      <strong>Bulk Upload BFS Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputFa" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderFa" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewFa" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsFa" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmFa" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearFa" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionFa" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, BFS Issue Date.</p>
+                      <button id="downloadEmployeeTemplateFa" class="secondary-btn" type="button" data-cert-type="fa">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormFa" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>BFS Register</h3>
+              <input id="employeeSearchFa" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterFa">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterFa">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsFa"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelFa" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleFa">Edit Certificate</h3>
+              <button id="cancelCertEditFa" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormFa" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="fa" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── FS CERTIFICATES ────────────────────────────────────── -->
+        <section id="fs" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge fs-badge">FS</span> Fire Safety Certificate</h2><p>Add staff, bulk-upload FS certificate files, and manage Fire Safety records.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitleFs">Add Employee</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertFs" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
+                  <button id="showBulkUploadFs" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="cancelEmployeeEditFs" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormFs" class="employee-quick-form" data-cert-type="fs">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>BFS Issue Date <input name="fsIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonFs" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionFs" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num bfs-step">FS</span>
+                    <div>
+                      <strong>Bulk Upload BFS Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputFs" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderFs" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewFs" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsFs" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmFs" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearFs" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionFs" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, BFS Issue Date.</p>
+                      <button id="downloadEmployeeTemplateFs" class="secondary-btn" type="button" data-cert-type="fs">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormFs" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>BFS Register</h3>
+              <input id="employeeSearchFs" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterFs">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterFs">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsFs"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelFs" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitleFs">Edit Certificate</h3>
+              <button id="cancelCertEditFs" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormFs" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="fs" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── ALERTS & EXPORT ─────────────────────────────────────── -->
+        <section id="alerts" class="view">
+          <div class="section-heading">
+            <div><h2>Alerts &amp; Export</h2><p>Send certificate renewal reminders by email and download the compliance report.</p></div>
+          </div>
+
+          <div class="alerts-export-grid">
+            <section class="panel editor-only">
+              <div class="panel-heading"><h3>📅 Schedule Dates</h3></div>
+              <p class="muted" style="padding:0 18px;margin:0 0 8px;font-size:13px;">Renewal dates the operations team can schedule employees to. Capacity: 15 per date.</p>
+              <form id="slotForm" class="settings-grid" style="padding:0 18px 12px;">
+                <label>Date
+                  <input name="slotDate" type="date" required />
+                </label>
+                <label>Label <span style="font-weight:400;color:#6b7280">(optional)</span>
+                  <input name="slotLabel" type="text" placeholder="e.g. OHC medical – Karama center" />
+                </label>
+                <button class="primary-btn" type="submit">＋ Add Date</button>
+              </form>
+              <div id="slotList" style="padding:0 18px 16px;"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading"><h3>Email Alert Settings</h3></div>
+              <form id="alertSettingsForm" class="settings-grid">
+                <label>Manager email
+                  <input name="managerEmail" type="email" placeholder="manager@calo.app" />
+                </label>
+                <label>Reminder period
+                  <select name="reminderDays">
+                    <option value="90">90 days before expiry</option>
+                    <option value="60">60 days before expiry</option>
+                    <option value="30" selected>30 days before expiry</option>
+                    <option value="14">14 days before expiry</option>
+                    <option value="7">7 days before expiry</option>
+                  </select>
+                </label>
+                <button class="primary-btn" type="submit">Save &amp; Send Mail Alert</button>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading"><h3>Export</h3></div>
+              <div class="export-actions">
+                <div>
+                  <strong>PDF Report</strong>
+                  <p>Full compliance report with BFS, OHC, FSC &amp; FAC summaries, statuses, and dates.</p>
+                  <button id="exportPdf" class="primary-btn" type="button">Download PDF</button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading">
+              <h3>Alert Queue</h3>
+              <button id="prepareAllAlerts" class="secondary-btn" type="button">Send All to Manager</button>
+            </div>
+            <div id="alertQueue"></div>
+          </section>
+        </section>
+
+      </main>
+    </div>
+
+    <!-- cert upload modal -->
+    <!-- Schedule modal -->
+    <div id="scheduleModal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 id="scheduleModalTitle">Schedule Renewal</h3>
+          <button id="scheduleModalClose" class="ghost-btn" type="button">✕</button>
+        </div>
+        <form id="scheduleModalForm" class="modal-form">
+          <input name="employeeId" type="hidden" />
+          <input name="type" type="hidden" />
+          <div id="scheduleDateWrap">
+            <label>Renewal date<input name="scheduledDate" type="date" /></label>
+          </div>
+          <div id="scheduleSlotWrap" class="hidden">
+            <label>Renewal date <span style="font-weight:400;color:#6b7280">(editor-approved dates only)</span>
+              <select name="scheduledSlot"></select>
+            </label>
+          </div>
+          <label>Note <span style="font-weight:400;color:#6b7280">(optional)</span>
+            <input name="scheduleNote" type="text" placeholder="e.g. Booked with DM training center" />
+          </label>
+          <div class="modal-actions">
+            <button class="primary-btn" type="submit">Save Schedule</button>
+            <button id="scheduleModalCancel" class="secondary-btn" type="button">Cancel</button>
+            <button id="scheduleModalClear" class="ghost-btn" type="button" style="margin-left:auto;color:#dc2626">Clear Schedule</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="certUploadModal" class="modal-overlay hidden">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 id="certUploadModalTitle">Upload Certificate</h3>
+          <button id="certUploadModalClose" class="ghost-btn" type="button">✕</button>
+        </div>
+        <form id="certUploadModalForm" class="modal-form">
+          <input name="employeeId" type="hidden" />
+          <input name="type" type="hidden" />
+          <label>Issue date <input name="issueDate" type="date" /></label>
+          <label>Expiry date <input name="expiryDate" type="date" /></label>
+          <label>Certificate file (PDF / image)
+            <input name="file" type="file" accept=".pdf,image/*" required />
+          </label>
+          <div class="modal-actions">
+            <button class="primary-btn" type="submit">Save Certificate</button>
+            <button id="certUploadModalCancel" class="secondary-btn" type="button">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
