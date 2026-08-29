@@ -135,16 +135,17 @@ document.getElementById("togglePw").addEventListener("click", () => {
 async function onSignIn(user) {
   session = user;
 
-  // Fetch market + role from user_roles (single source of truth)
+  // Fetch market + role from user_roles — 3 second timeout so login never hangs
   let market = "UAE", role = null;
   try {
-    const { data } = await sb.from("user_roles")
-      .select("market, role").eq("user_id", user.id).maybeSingle();
+    const timeout = new Promise(r => setTimeout(() => r({ data: null }), 3000));
+    const query   = sb.from("user_roles").select("market, role").eq("user_id", user.id).maybeSingle();
+    const { data } = await Promise.race([query, timeout]);
     if (data?.market) market = data.market;
     role = data?.role || null;
   } catch(e) { /* fallback to UAE */ }
 
-  // Global admin defaults to UAE view (can be extended later)
+  // Global admin defaults to UAE view
   if (role === "global_admin") market = "UAE";
 
   isEditor = (role === "admin");
