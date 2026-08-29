@@ -119,13 +119,20 @@ async function onSignIn(user) {
   var market = "UAE", role = null;
   try {
     var timeoutP = new Promise(function(res) { setTimeout(function() { res({data:null}); }, 3000); });
-    var queryP   = sb.from("user_roles").select("market, role").eq("user_id", user.id).maybeSingle();
-    var result   = await Promise.race([queryP, timeoutP]);
-    if (result && result.data && result.data.market) market = result.data.market;
-    if (result && result.data && result.data.role)   role   = result.data.role;
+    // Fetch ALL roles for this user so global_admin + market admin can coexist
+    var queryP = sb.from("user_roles").select("market, role").eq("user_id", user.id);
+    var result = await Promise.race([queryP, timeoutP]);
+    var rows   = (result && result.data) ? result.data : [];
+    // Prefer the most specific role: market admin > global_admin > viewer
+    var globalRow = rows.find(function(r) { return r.role === "global_admin"; });
+    var adminRow  = rows.find(function(r) { return r.role === "admin"; });
+    var viewerRow = rows.find(function(r) { return r.role === "viewer"; });
+    if (adminRow)  { market = adminRow.market;  role = "admin"; }
+    else if (globalRow) { market = "UAE"; role = "global_admin"; }
+    else if (viewerRow) { market = viewerRow.market; role = "viewer"; }
   } catch(e) {}
-  if (role === "global_admin") market = "UAE";
-  isEditor = (role === "admin");
+  // global_admin gets full edit access on their market
+  isEditor = (role === "admin" || role === "global_admin");
   isOps    = (role === "viewer");
   applyMarket(market);
   setSyncState("syncing");
