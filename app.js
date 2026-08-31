@@ -1312,7 +1312,7 @@ function exportPDF() {
     doc.setFontSize(8);doc.setTextColor(156,163,175);
     doc.text(`UAE Kitchen Compliance Portal · Confidential · Page ${p} of ${pc}`,pageW/2,doc.internal.pageSize.getHeight()-20,{align:"center"});
   }
-  doc.save(`uae-kitchen-compliance-${today()}.pdf`);
+  doc.save(`${MARKET.toLowerCase()}-kitchen-compliance-${today()}.pdf`);
   showToast("PDF report ready.");
 }
 
