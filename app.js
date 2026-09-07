@@ -231,7 +231,7 @@ async function upsertCertificate(empStateId, type, cert, existingCertId) {
   }
 
   const payload = {
-    employee_id: realEmpId, type, market: MARKET, market: MARKET,
+    employee_id: realEmpId, type, market: MARKET,
     issue_date:     cert.issueDate     || null,
     expiry_date:    cert.expiryDate    || null,
     file_name:      cert.file?.name     || null,
@@ -545,8 +545,12 @@ function renderSlots() {
 
 // ── Per-section (BFS / OHC) wiring ────────────────────────────────────────────
 function initSection(type) {
-  const sfx = SECTION_SUFFIX[type];
+  // Use the section suffix from whichever market config has this type
+  const allSuffixes = Object.assign({}, MARKET_CONFIG.UAE.sectionSuffix, MARKET_CONFIG.Qatar.sectionSuffix);
+  const sfx = allSuffixes[type];
+  if (!sfx) return; // unknown type, skip
   const employeeForm    = document.getElementById(`employeeForm${sfx}`);
+  if (!employeeForm) return; // DOM element not found, skip
   const showBulkCertBtn = document.getElementById(`showBulkCert${sfx}`);
   const showBulkEmpBtn  = document.getElementById(`showBulkUpload${sfx}`);
   const bulkCertSection = document.getElementById(`bulkCertSection${sfx}`);
@@ -1369,7 +1373,10 @@ function hideProgressToast() {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
-CERT_TYPES.forEach(initSection);
+// Init ALL possible cert sections at boot so event listeners are always attached.
+// applyMarket() will hide/show the right ones after login.
+Object.keys(Object.assign({}, MARKET_CONFIG.UAE.certificates, MARKET_CONFIG.Qatar.certificates))
+  .forEach(function(t) { try { initSection(t); } catch(e) {} });
 render(); // show login screen immediately while we check session
 
 // onAuthStateChange is the single source of truth for auth state.
