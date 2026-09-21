@@ -1101,7 +1101,7 @@ function renderSectionRows(type) {
     const s = getCertSummary(e,type);
     return [e.name,e.employeeId,e.department].join(" ").toLowerCase().includes(q)
       && (dept==="all"||e.department===dept)
-      && (stat==="all"||(stat==="Expiring"?(s.status==="Expiring in 30 Days"||s.status==="Expiring in 90 Days"):s.status===stat));
+      && (stat==="all"||(stat==="Expiring"?(s.status==="Expiring in 30 Days"||s.status==="Expiring in 90 Days"):s.status===stat||s.status.startsWith(stat)));
   });
   const emptyMsg = UNIVERSAL_TYPES.includes(type)
     ? "No employees match this filter."
