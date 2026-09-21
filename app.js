@@ -16,9 +16,10 @@ const MARKET_CONFIG = {
       fac: { label: "FAC", fullName: "First Aid Certificate",    validYears: 2 },
     },
     sectionSuffix:  { bfs: "Bfs", ohc: "Ohc", fsc: "Fsc", fac: "Fac" },
-    linkedTypes:    ["fsc", "fac"],
-    universalTypes: ["bfs", "ohc"],
-    navLabel:       "UAE Kitchen",
+    // certGroup: types that share one employee list. BFS+OHC share a list.
+    // FSC and FAC are independent. An employee added to FSC does NOT appear in FAC.
+    certGroups: [["bfs","ohc"], ["fsc"], ["fac"]],
+    navLabel:   "UAE Kitchen",
   },
   Qatar: {
     certificates: {
@@ -27,11 +28,29 @@ const MARKET_CONFIG = {
       fs: { label: "FS",  fullName: "Fire Safety Certificate",  validYears: 1 },
     },
     sectionSuffix:  { fh: "Fh", fa: "Fa", fs: "Fs" },
-    linkedTypes:    [],
-    universalTypes: ["fh", "fa", "fs"],
-    navLabel:       "Qatar Kitchen",
+    // Qatar: all cert types are fully independent
+    certGroups: [["fh"], ["fa"], ["fs"]],
+    navLabel:   "Qatar Kitchen",
   },
 };
+
+// ── Cert group helpers ────────────────────────────────────────────────────────
+// Returns all types that share a list with the given type (including itself)
+function getCertGroup(type) {
+  const cfg = MARKET_CONFIG[MARKET];
+  if (!cfg) return [type];
+  const group = cfg.certGroups.find(g => g.includes(type));
+  return group || [type];
+}
+// Returns true if an employee belongs in a given cert section
+// An employee belongs if they have cert data for ANY type in the same group
+function empBelongsInSection(emp, type) {
+  const group = getCertGroup(type);
+  return group.some(t => {
+    const cert = emp.certificates && emp.certificates[t];
+    return cert && (cert.issueDate || cert.expiryDate || cert.file || cert.scheduledDate);
+  });
+}
 
 let MARKET = null, CERTIFICATES = {}, CERT_TYPES = [], SECTION_SUFFIX = {}, LINKED_TYPES = [], UNIVERSAL_TYPES = [];
 const EDITOR_EMAILS = [];
@@ -43,8 +62,8 @@ function applyMarket(market) {
   CERTIFICATES    = cfg.certificates;
   CERT_TYPES      = Object.keys(CERTIFICATES);
   SECTION_SUFFIX  = cfg.sectionSuffix;
-  LINKED_TYPES    = cfg.linkedTypes;
-  UNIVERSAL_TYPES = cfg.universalTypes;
+  LINKED_TYPES    = []; // deprecated -- use certGroups instead
+  UNIVERSAL_TYPES = []; // deprecated -- use certGroups instead
   document.querySelectorAll(".market-label").forEach(function(el) { el.textContent = cfg.navLabel; });
   document.title = "Calo Compliance Portal";
   document.querySelectorAll(".nav-tab[data-view]").forEach(function(tab) {
@@ -67,12 +86,9 @@ function hasCertData(emp, type) {
   var r = (emp.certificates && emp.certificates[type]) || {};
   return Boolean(r.issueDate || r.expiryDate || r.file || r.scheduledDate);
 }
+// An employee appears in a cert section if they have data for any type in that group
 function certApplies(emp, type) {
-  if (LINKED_TYPES.indexOf(type) !== -1) return LINKED_TYPES.some(function(t) { return hasCertData(emp, t); });
-  if (UNIVERSAL_TYPES.indexOf(type) !== -1) {
-    return UNIVERSAL_TYPES.some(function(t) { return hasCertData(emp, t); }) || !LINKED_TYPES.some(function(t) { return hasCertData(emp, t); });
-  }
-  return hasCertData(emp, type);
+  return empBelongsInSection(emp, type);
 }
 const defaultSettings = { reminderDays: 30, managerEmail: "" };
 
@@ -384,185 +400,6 @@ function upcomingSlots() {
 const scheduleModal     = document.getElementById("scheduleModal");
 const scheduleModalForm = document.getElementById("scheduleModalForm");
 
-// ── Bulk schedule state ───────────────────────────────────────────────────────
-let bulkSelectedEmpIds = new Set(); // employee ids selected for bulk scheduling
-
-function toggleBulkSelect(empId, checked) {
-  checked ? bulkSelectedEmpIds.add(empId) : bulkSelectedEmpIds.delete(empId);
-  updateBulkScheduleBar();
-}
-
-function toggleSelectAll(type, checked) {
-  const sfx  = Object.assign({}, MARKET_CONFIG.UAE.sectionSuffix, MARKET_CONFIG.Qatar.sectionSuffix)[type];
-  const q    = document.getElementById("employeeSearch" + sfx).value.trim().toLowerCase();
-  const dept = document.getElementById("employeeDepartmentFilter" + sfx).value;
-  const stat = document.getElementById("employeeStatusFilter" + sfx).value;
-  const visible = state.employees.filter(e => {
-    if (!certApplies(e, type)) return false;
-    const s = getCertSummary(e, type);
-    return [e.name, e.employeeId, e.department].join(" ").toLowerCase().includes(q)
-      && (dept === "all" || e.department === dept)
-      && (stat === "all" || (stat === "Expiring" ? (s.status === "Expiring in 30 Days" || s.status === "Expiring in 90 Days") : s.status === stat));
-  });
-  visible.forEach(e => checked ? bulkSelectedEmpIds.add(e.id) : bulkSelectedEmpIds.delete(e.id));
-  updateBulkScheduleBar();
-  renderSectionRows(type); // re-render to update checkboxes
-}
-
-function updateBulkScheduleBar() {
-  const count = bulkSelectedEmpIds.size;
-  document.querySelectorAll(".bulk-schedule-bar").forEach(bar => {
-    bar.classList.toggle("hidden", count === 0);
-    bar.querySelector(".bulk-count").textContent = count + " employee" + (count !== 1 ? "s" : "") + " selected";
-  });
-  // Update select-all checkboxes
-  CERT_TYPES.forEach(type => {
-    const sfx = Object.assign({}, MARKET_CONFIG.UAE.sectionSuffix, MARKET_CONFIG.Qatar.sectionSuffix)[type];
-    const allChk = document.getElementById("selectAll" + sfx);
-    if (!allChk) return;
-    const visibleEmps = state.employees.filter(e => certApplies(e, type));
-    const allSelected = visibleEmps.length > 0 && visibleEmps.every(e => bulkSelectedEmpIds.has(e.id));
-    allChk.checked = allSelected;
-    allChk.indeterminate = !allSelected && visibleEmps.some(e => bulkSelectedEmpIds.has(e.id));
-  });
-}
-
-function openBulkScheduleModal() {
-  if (!bulkSelectedEmpIds.size) return;
-  const modal = document.getElementById("bulkScheduleModal");
-  const form  = document.getElementById("bulkScheduleForm");
-  const names = [...bulkSelectedEmpIds].map(id => {
-    const emp = state.employees.find(e => e.id === id);
-    return emp ? escHtml(emp.name) : "";
-  }).filter(Boolean);
-  document.getElementById("bulkScheduleNames").innerHTML =
-    names.slice(0, 8).join(", ") + (names.length > 8 ? " <em>and " + (names.length - 8) + " more</em>" : "");
-  // Populate slot picker same as individual schedule modal
-  const slotSelect = form.elements.bulkScheduledSlot;
-  const dateInput  = form.elements.bulkScheduledDate;
-  if (isEditor) {
-    document.getElementById("bulkDateWrap").classList.remove("hidden");
-    document.getElementById("bulkSlotWrap").classList.add("hidden");
-    dateInput.required = true; slotSelect.required = false;
-    dateInput.value = "";
-  } else {
-    document.getElementById("bulkDateWrap").classList.add("hidden");
-    document.getElementById("bulkSlotWrap").classList.remove("hidden");
-    dateInput.required = false; slotSelect.required = true;
-    const slots = upcomingSlots();
-    if (!slots.length) {
-      slotSelect.innerHTML = "<option value=''>No dates available -- contact HR</option>";
-    } else {
-      slotSelect.innerHTML = ["<option value=''>Select a date...</option>", ...slots.map(sl => {
-        const booked  = slotBookedCount(sl.date);
-        const spots   = Math.max(0, sl.capacity - booked);
-        const label   = sl.label ? sl.label + " (" + fmtDate(sl.date) + ")" : fmtDate(sl.date);
-        return "<option value='" + sl.date + "'" + (spots === 0 ? " disabled" : "") + ">" + label + " -- " + spots + " spots left</option>";
-      })].join("");
-    }
-  }
-  modal.classList.remove("hidden");
-}
-
-function closeBulkScheduleModal() {
-  document.getElementById("bulkScheduleModal").classList.add("hidden");
-  document.getElementById("bulkScheduleForm").reset();
-}
-
-document.addEventListener("DOMContentLoaded", function() {
-  const bsModal = document.getElementById("bulkScheduleModal");
-  const bsForm  = document.getElementById("bulkScheduleForm");
-  if (!bsModal || !bsForm) return;
-
-  bsModal.addEventListener("click", function(e) { if (e.target === bsModal) closeBulkScheduleModal(); });
-  document.getElementById("bulkScheduleClose").addEventListener("click", closeBulkScheduleModal);
-  document.getElementById("bulkScheduleCancel").addEventListener("click", closeBulkScheduleModal);
-
-  bsForm.addEventListener("submit", async function(e) {
-    e.preventDefault();
-    const d    = formData(bsForm);
-    const date = d.bulkScheduledDate || d.bulkScheduledSlot;
-    const note = d.bulkScheduleNote || "";
-    if (!date) { showToast("Please select a date."); return; }
-
-    const btn = bsForm.querySelector("button[type=submit]");
-    btn.disabled = true; btn.textContent = "Scheduling...";
-    setSyncState("syncing");
-
-    const empIds = [...bulkSelectedEmpIds];
-    let saved = 0;
-    try {
-      for (const empId of empIds) {
-        const emp = state.employees.find(ex => ex.id === empId);
-        if (!emp) continue;
-        // Schedule ALL cert types for this employee
-        for (const type of CERT_TYPES) {
-          const cert = emp.certificates[type] || {};
-          const s    = getCertSummary(emp, type);
-          if (s.status === "Valid") continue; // skip valid certs
-          const updated = { ...cert, scheduledDate: date, scheduleNote: note };
-          emp.certificates[type] = updated;
-          await upsertCertificate(empId, type, updated, emp._certIds?.[type]);
-          saved++;
-        }
-      }
-      setSyncState("idle");
-      bulkSelectedEmpIds.clear();
-      updateBulkScheduleBar();
-      closeBulkScheduleModal();
-      renderAll();
-      showToast("Scheduled " + empIds.length + " employee(s) across " + saved + " certificate(s).");
-    } catch(err) {
-      setSyncState("error");
-      showToast("Bulk schedule failed: " + err.message);
-    } finally {
-      btn.disabled = false; btn.textContent = "Confirm Schedule";
-    }
-  });
-
-  // Clear bulk schedule
-  document.getElementById("bulkScheduleClear").addEventListener("click", async function() {
-    const empIds = [...bulkSelectedEmpIds];
-    if (!empIds.length) return;
-    const btn = this;
-    btn.disabled = true;
-    setSyncState("syncing");
-    try {
-      for (const empId of empIds) {
-        const emp = state.employees.find(ex => ex.id === empId);
-        if (!emp) continue;
-        for (const type of CERT_TYPES) {
-          const cert = emp.certificates[type];
-          if (!cert || !cert.scheduledDate) continue;
-          const updated = { ...cert, scheduledDate: "", scheduleNote: "" };
-          emp.certificates[type] = updated;
-          await upsertCertificate(empId, type, updated, emp._certIds?.[type]);
-        }
-      }
-      setSyncState("idle");
-      bulkSelectedEmpIds.clear();
-      updateBulkScheduleBar();
-      closeBulkScheduleModal();
-      renderAll();
-      showToast("Cleared schedules for " + empIds.length + " employee(s).");
-    } catch(err) {
-      setSyncState("error");
-      showToast("Failed: " + err.message);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  // Deselect all
-  document.querySelectorAll(".bulk-deselect-all").forEach(function(btn) {
-    btn.addEventListener("click", function() {
-      bulkSelectedEmpIds.clear();
-      updateBulkScheduleBar();
-      CERT_TYPES.forEach(renderSectionRows);
-    });
-  });
-});
-
 function openScheduleModal(empId, type) {
   if (!canSchedule()) return;
   const emp = state.employees.find(x => x.id === empId); if (!emp) return;
@@ -773,15 +610,30 @@ function initSection(type) {
     resetEmployeeForm(type); renderAll(); setSyncState("syncing");
     try {
       const dbId = await upsertEmployee(emp);
-      // FIX BUG3: update _certIds in state after successful DB write
+      // Save cert data for the added type
       if (issueDate) {
         const certId = await upsertCertificate(dbId, type, certData[type], emp._certIds?.[type]);
         const inState = state.employees.find(x => x.id === id);
         if (inState) { if (!inState._certIds) inState._certIds = {}; inState._certIds[type] = certId; }
       }
+      // For group-shared types (e.g. BFS+OHC): ensure sibling types have an empty
+      // cert record in DB so the employee appears in the sibling section too
+      const group = getCertGroup(type);
+      for (const sibling of group) {
+        if (sibling === type) continue;
+        if (!certData[sibling] || (!certData[sibling].issueDate && !certData[sibling].expiryDate)) {
+          // Create an empty placeholder cert record so employee shows in sibling section
+          const emptyCert = { issueDate: "", expiryDate: "", scheduledDate: "", scheduleNote: "" };
+          certData[sibling] = emptyCert;
+          const inState = state.employees.find(x => x.id === id);
+          if (inState) inState.certificates[sibling] = emptyCert;
+          const sibCertId = await upsertCertificate(dbId, sibling, emptyCert, emp._certIds?.[sibling]);
+          if (inState) { if (!inState._certIds) inState._certIds = {}; inState._certIds[sibling] = sibCertId; }
+        }
+      }
       setSyncState("idle");
     } catch(err) { console.error(err); setSyncState("error"); showToast(`Save failed: ${err.message}`); }
-    showToast(dupId ? `✅ ${emp.name} added to ${CERTIFICATES[type].label} list.` : existing ? "Employee updated." : "Employee added.");
+    showToast(dupId ? `Added ${emp.name} to ${CERTIFICATES[type].label} list.` : existing ? "Employee updated." : "Employee added.");
   });
 
   cancelEditBtn.addEventListener("click", () => resetEmployeeForm(type));
@@ -1235,37 +1087,8 @@ function renderSectionRows(type) {
   const emptyMsg = UNIVERSAL_TYPES.includes(type)
     ? "No employees match this filter."
     : `No employees enrolled in ${CERTIFICATES[type].label} yet. Add them via the form above (use their existing Employee ID), bulk CSV, or by uploading their certificate file.`;
-  // Bulk schedule bar (shown above table when employees selected)
-  const barId = `bulkBar${sfx}`;
-  let bar = document.getElementById(barId);
-  if (!bar) {
-    bar = document.createElement("div");
-    bar.id = barId;
-    bar.className = "bulk-schedule-bar hidden";
-    bar.innerHTML = `<span class="bulk-count">0 employees selected</span>
-      <button class="primary-btn" type="button" onclick="openBulkScheduleModal()">📅 Bulk Schedule</button>
-      <button class="ghost-btn bulk-deselect-all" type="button">Deselect all</button>`;
-    const tableWrap = document.getElementById(`staffRows${sfx}`)?.closest(".table-wrap") || document.getElementById(`staffRows${sfx}`)?.parentElement;
-    if (tableWrap) tableWrap.parentElement.insertBefore(bar, tableWrap);
-    bar.querySelector(".bulk-deselect-all").addEventListener("click", () => {
-      bulkSelectedEmpIds.clear(); updateBulkScheduleBar(); CERT_TYPES.forEach(renderSectionRows);
-    });
-  }
-
-  // Update select-all header checkbox
-  const allChkEl = document.getElementById(`selectAll${sfx}`);
-  if (allChkEl) {
-    const allChecked = emps.length > 0 && emps.every(e => bulkSelectedEmpIds.has(e.id));
-    allChkEl.checked = allChecked;
-    allChkEl.indeterminate = !allChecked && emps.some(e => bulkSelectedEmpIds.has(e.id));
-    allChkEl.onchange = (ev) => toggleSelectAll(type, ev.target.checked);
-  }
-
   setRows(`staffRows${sfx}`, emps.map(e=>{
     const s = getCertSummary(e,type);
-    const checked = bulkSelectedEmpIds.has(e.id) ? "checked" : "";
-    const checkCell = canSchedule()
-      ? `<td class="bulk-check-cell"><input type="checkbox" class="bulk-checkbox" ${checked} onchange="toggleBulkSelect('${e.id}',this.checked)" aria-label="Select ${escHtml(e.name)}"></td>` : "";
     const uploadBtn = isEditor && !s.record.file
       ? `<button class="upload-cert-btn" title="Upload ${CERTIFICATES[type].label} file" data-action="upload-cert" data-eid="${e.id}" data-type="${type}">＋</button>` : "";
     const scheduleBtn = canSchedule() && s.status !== "Valid"
@@ -1273,8 +1096,7 @@ function renderSectionRows(type) {
     const editorActions = isEditor ? `
       <button class="text-btn" data-action="edit-emp" data-id="${e.id}" data-section="${type}">Edit</button>
       <button class="text-btn danger" data-action="del-emp" data-id="${e.id}">Remove</button>` : "";
-    return `<tr class="${bulkSelectedEmpIds.has(e.id) ? "bulk-selected-row" : ""}">
-      ${checkCell}
+    return `<tr>
       <td><strong>${escHtml(e.name)}</strong></td><td>${escHtml(e.employeeId)}</td><td>${escHtml(e.department)}</td>
       <td>
         ${isEditor?`<button class="cert-status-btn" data-action="edit-cert" data-eid="${e.id}" data-type="${type}">${badge(s.status,s.scheduledDate)}</button>`:badge(s.status,s.scheduledDate)}
@@ -1287,7 +1109,7 @@ function renderSectionRows(type) {
       </td>
       ${isEditor?`<td class="row-actions editor-only">${editorActions}</td>`:""}
     </tr>`;
-  }), isEditor?9:8, emptyMsg);
+  }), isEditor?8:7, emptyMsg);
 }
 function renderAlertSettings() {
   alertSettingsForm.elements.reminderDays.value = String(state.settings.reminderDays);
