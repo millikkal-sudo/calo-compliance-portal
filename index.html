@@ -13,23 +13,6 @@
     .fs-badge  { background: #ffedd5; color: #9a3412; }
     .nav-tab.hidden   { display: none !important; }
   </style>
-
-  <style>
-    /* Bulk schedule */
-    .bulk-check-th  { width: 36px; padding: 4px 8px; }
-    .bulk-check-cell{ width: 36px; padding: 4px 8px; text-align: center; }
-    .bulk-checkbox  { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
-    .bulk-selected-row td { background: color-mix(in srgb, var(--accent) 5%, transparent); }
-    .bulk-schedule-bar {
-      display: flex; align-items: center; gap: 10px;
-      background: color-mix(in srgb, var(--accent) 8%, transparent);
-      border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-      border-radius: 8px; padding: 10px 16px; margin: 0 0 12px;
-    }
-    .bulk-schedule-bar.hidden { display: none !important; }
-    .bulk-count { font-size: 13px; font-weight: 600; color: var(--accent); flex: 1; }
-  </style>
-
 </head>
   <body>
 
@@ -334,12 +317,14 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
-                  <tr><th class="bulk-check-th"><input type="checkbox" id="selectAllBfs" title="Select all"></th>
+                  <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllBfs" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -469,12 +454,14 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
-                  <tr><th class="bulk-check-th"><input type="checkbox" id="selectAllOhc" title="Select all"></th>
+                  <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllOhc" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>OHC Status</th><th>OHC Issue</th><th>OHC Expiry</th><th>OHC Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -604,12 +591,14 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
-                  <tr><th class="bulk-check-th"><input type="checkbox" id="selectAllFs" title="Select all"></th><th class="bulk-check-th"><input type="checkbox" id="selectAllFsc" title="Select all"></th>
+                  <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFsc" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FSC Status</th><th>FSC Issue</th><th>FSC Expiry</th><th>FSC Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -739,12 +728,14 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
-                  <tr><th class="bulk-check-th"><input type="checkbox" id="selectAllFa" title="Select all"></th><th class="bulk-check-th"><input type="checkbox" id="selectAllFac" title="Select all"></th>
+                  <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFac" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FAC Status</th><th>FAC Issue</th><th>FAC Expiry</th><th>FAC Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -874,14 +865,16 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
-                  <tr><th class="bulk-check-th"><input type="checkbox" id="selectAllFh" title="Select all"></th>
+                  <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFh" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
-                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th>FH Status</th><th>FH Issue</th><th>FH Expiry</th><th>FH Certificate</th>
                     <th class="editor-only-col">Actions</th>
                   </tr>
                 </thead>
@@ -1009,14 +1002,16 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
                   <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFa" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
-                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th>FA Status</th><th>FA Issue</th><th>FA Expiry</th><th>FA Certificate</th>
                     <th class="editor-only-col">Actions</th>
                   </tr>
                 </thead>
@@ -1144,14 +1139,16 @@
                 <option value="Expiring">Expiring</option>
                 <option value="Expired">Expired</option>
                 <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
               </select>
             </div>
             <div class="table-wrap">
               <table class="staff-table">
                 <thead>
                   <tr>
+                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFs" title="Select all"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
-                    <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
+                    <th>FS Status</th><th>FS Issue</th><th>FS Expiry</th><th>FS Certificate</th>
                     <th class="editor-only-col">Actions</th>
                   </tr>
                 </thead>
@@ -1298,45 +1295,5 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
-  
-  <!-- ── Bulk Schedule Modal ─────────────────────────────────────── -->
-  <div id="bulkScheduleModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulkScheduleTitle">
-    <div class="modal-panel" style="max-width:480px">
-      <div class="modal-header">
-        <h2 id="bulkScheduleTitle">Bulk Schedule Renewal</h2>
-        <button id="bulkScheduleClose" class="modal-close" type="button" aria-label="Close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-desc" style="margin-bottom:12px">
-          Setting a renewal date for <strong><span id="bulkScheduleNames"></span></strong>.<br>
-          <small style="color:var(--text-muted)">All non-valid certificates for the selected employees will be scheduled.</small>
-        </p>
-        <form id="bulkScheduleForm">
-          <!-- Editor: free date picker -->
-          <div id="bulkDateWrap" class="form-group">
-            <label for="bulkScheduledDate">Renewal Date</label>
-            <input id="bulkScheduledDate" name="bulkScheduledDate" type="date" />
-          </div>
-          <!-- Ops: slot picker -->
-          <div id="bulkSlotWrap" class="form-group hidden">
-            <label for="bulkScheduledSlot">Select Available Date</label>
-            <select id="bulkScheduledSlot" name="bulkScheduledSlot">
-              <option value="">Select a date...</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="bulkScheduleNote">Note <small>(optional)</small></label>
-            <input id="bulkScheduleNote" name="bulkScheduleNote" type="text" placeholder="e.g. Training centre booked" maxlength="120" />
-          </div>
-          <div class="modal-actions">
-            <button type="submit" class="primary-btn">📅 Confirm Schedule</button>
-            <button type="button" id="bulkScheduleClear" class="ghost-btn">Clear Schedules</button>
-            <button type="button" id="bulkScheduleCancel" class="ghost-btn">Cancel</button>
-          </div>
-        </form>
-      </div>
-    </div>
-  </div>
-
-</body>
+  </body>
 </html>
