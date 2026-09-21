@@ -42,13 +42,20 @@ function getCertGroup(type) {
   const group = cfg.certGroups.find(g => g.includes(type));
   return group || [type];
 }
-// Returns true if an employee belongs in a given cert section
-// An employee belongs if they have cert data for ANY type in the same group
+// Returns true if an employee belongs in a given cert section.
+// An employee belongs if:
+//   a) they have actual cert data (issue date, expiry, file) for any type in the group, OR
+//   b) they have a cert DB record (even empty placeholder) for any type in the group
+//      -- this covers bulk-uploaded employees whose sibling certs are empty placeholders
 function empBelongsInSection(emp, type) {
   const group = getCertGroup(type);
   return group.some(t => {
+    // Check actual cert data
     const cert = emp.certificates && emp.certificates[t];
-    return cert && (cert.issueDate || cert.expiryDate || cert.file || cert.scheduledDate);
+    if (cert && (cert.issueDate || cert.expiryDate || cert.file || cert.scheduledDate)) return true;
+    // Check DB presence (empty placeholder record exists)
+    if (emp._certPresence && emp._certPresence.has(t)) return true;
+    return false;
   });
 }
 
@@ -177,10 +184,21 @@ async function loadFromSupabase() {
     if (e1) throw e1;
     if (e2) throw e2;
 
+    // Build cert presence map: empId -> Set of cert types that have a DB row
+    // This includes empty placeholder rows created during bulk upload for group siblings
+    const empCertPresence = {};
+    (certs || []).forEach(c => {
+      if (!empCertPresence[c.employee_id]) empCertPresence[c.employee_id] = new Set();
+      empCertPresence[c.employee_id].add(c.type);
+    });
+
     state.employees = (emps || []).map(emp => {
       const ec = (certs || []).filter(c => c.employee_id === emp.id);
       const certificates = {}, _certIds = {};
-      CERT_TYPES.forEach(t => {
+      // Load all cert types across ALL markets so group sibling lookup works
+      const allTypes = Object.keys(Object.assign({},
+        MARKET_CONFIG.UAE.certificates, MARKET_CONFIG.Qatar.certificates));
+      allTypes.forEach(t => {
         const c = ec.find(x => x.type === t) || {};
         certificates[t] = c.id ? { issueDate: c.issue_date||"", expiryDate: c.expiry_date||"",
                                    scheduledDate: c.scheduled_date||"", scheduleNote: c.schedule_note||"",
@@ -191,6 +209,7 @@ async function loadFromSupabase() {
         id: emp.id, name: emp.name, employeeId: emp.employee_id,
         department: emp.department, createdAt: emp.created_at, updatedAt: emp.updated_at,
         certificates, _certIds,
+        _certPresence: empCertPresence[emp.id] || new Set(),
       };
     });
     state.settings = cfg ? { reminderDays: cfg.reminder_days, managerEmail: cfg.manager_email||"" } : { ...defaultSettings };
@@ -1189,11 +1208,32 @@ async function importFromCsv(text) {
   for (const { empRow, certDates } of allEntries) {
     const realId = empIdToDbId[empRow.employee_id.toLowerCase()];
     if (!realId) continue;
+    // Track which types already have data so we can fill siblings
+    const typesWithData = CERT_TYPES.filter(t => certDates[t]);
+    // Add cert rows for types that have data from CSV
     CERT_TYPES.forEach(type => {
-      if (certDates[type]) certRows.push({ employee_id: realId, type, market: MARKET,
-        issue_date: certDates[type], expiry_date: calcExpiry(certDates[type], CERTIFICATES[type].validYears),
-        updated_at: new Date().toISOString() });
+      if (certDates[type]) {
+        certRows.push({ employee_id: realId, type, market: MARKET,
+          issue_date: certDates[type],
+          expiry_date: calcExpiry(certDates[type], CERTIFICATES[type].validYears),
+          updated_at: new Date().toISOString() });
+      }
     });
+    // For group-shared types: if ANY type in a group has data, create empty
+    // placeholder records for siblings so employee appears in all group sections
+    const cfg = MARKET_CONFIG[MARKET];
+    if (cfg && cfg.certGroups) {
+      cfg.certGroups.forEach(group => {
+        const groupHasData = group.some(t => certDates[t]);
+        if (!groupHasData) return; // no data for this group, skip
+        group.forEach(sibling => {
+          if (certDates[sibling]) return; // already has data, skip
+          // Create empty placeholder so employee shows in sibling section
+          certRows.push({ employee_id: realId, type: sibling, market: MARKET,
+            issue_date: null, expiry_date: null, updated_at: new Date().toISOString() });
+        });
+      });
+    }
   }
   if (certRows.length > 0) {
     showProgressToast("Writing " + certRows.length + " certificate records...", 75);
