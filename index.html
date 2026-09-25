@@ -4,15 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Calo Compliance Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css" />
-    <style>
-    /* Unified portal: cert sections hidden until applyMarket() runs */
-    .cert-view-hidden { display: none !important; }
-    .fh-badge  { background: #fef9c3; color: #854d0e; }
-    .fa-badge  { background: #fce7f3; color: #9d174d; }
-    .fs-badge  { background: #ffedd5; color: #9a3412; }
-    .nav-tab.hidden   { display: none !important; }
-  </style>
+
 </head>
   <body>
 
@@ -28,8 +24,8 @@
           <i></i>
         </div>
         <div class="login-copy">
-          <h1>Welcome back</h1>
-          <p>Sign in to manage compliance certificates.</p>
+          <h1>Compliance, sorted.</h1>
+          <p>Every certificate, every kitchen, one place. Sign in to keep your team covered.</p>
         </div>
         <form id="loginForm" class="login-form" autocomplete="on">
           <label>
@@ -51,7 +47,7 @@
         </div>
       </div>
       <div class="login-locations">
-        <span>Dubai</span><span>Compliance</span><span>Portal</span><span>CALO</span>
+        <span>UAE</span><span>Qatar</span><span>One portal</span>
       </div>
     </section>
 
@@ -77,7 +73,7 @@
 
         <div class="sidebar-panel">
           <span class="eyebrow">Signed in</span>
-          <strong id="signedInEmail">—</strong>
+          <strong id="signedInEmail"></strong>
           <div id="syncStatus" class="sync-status sync-idle">
             <span class="sync-dot"></span>
             <span id="syncLabel">Saved</span>
@@ -104,7 +100,7 @@
           <div class="section-heading">
             <div>
               <h2>Certificate Overview</h2>
-              <p>Live status — urgent renewals surfaced first.</p>
+              <p>Tap any number to see who is behind it.</p>
             </div>
             <div id="overallStatus" class="status-pill">Compliant</div>
           </div>
@@ -217,17 +213,17 @@
         <!-- ── BFS CERTIFICATES ────────────────────────────────────── -->
         <section id="bfs" class="view">
           <div class="section-heading">
-            <div><h2><span class="cert-type-badge bfs-badge">BFS</span> Basic Food Safety</h2><p>Add staff, bulk-upload BFS certificate files, and manage BFS records.</p></div>
+            <div><h2><span class="cert-type-badge bfs-badge">BFS</span> Basic Food Safety</h2><p>Who is covered, who is close, and who needs a nudge. Renew before it lapses.</p></div>
           </div>
 
           <!-- editor-only panels -->
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleBfs">Add Employee</h3>
+                <h3 id="employeeFormTitleBfs">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertBfs" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
-                  <button id="showBulkUploadBfs" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertBfs" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadBfs" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditBfs" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -256,7 +252,7 @@
                     <span class="step-num bfs-step">BFS</span>
                     <div>
                       <strong>Bulk Upload BFS Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -324,7 +320,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllBfs" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>BFS Status</th><th>BFS Issue</th><th>BFS Expiry</th><th>BFS Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -354,17 +350,17 @@
         <!-- ── OHC CERTIFICATES ────────────────────────────────────── -->
         <section id="ohc" class="view">
           <div class="section-heading">
-            <div><h2><span class="cert-type-badge ohc-badge">OHC</span> Occupational Health Card</h2><p>Add staff, bulk-upload OHC certificate files, and manage OHC records.</p></div>
+            <div><h2><span class="cert-type-badge ohc-badge">OHC</span> Occupational Health Card</h2><p>Who is covered, who is close, and who needs a nudge. Renew before it lapses.</p></div>
           </div>
 
           <!-- editor-only panels -->
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleOhc">Add Employee</h3>
+                <h3 id="employeeFormTitleOhc">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertOhc" class="secondary-btn" type="button">📎 Bulk Upload OHC Files</button>
-                  <button id="showBulkUploadOhc" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertOhc" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadOhc" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditOhc" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -393,7 +389,7 @@
                     <span class="step-num ohc-step">OHC</span>
                     <div>
                       <strong>Bulk Upload OHC Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -461,7 +457,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllOhc" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>OHC Status</th><th>OHC Issue</th><th>OHC Expiry</th><th>OHC Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -498,10 +494,10 @@
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleFsc">Add Employee</h3>
+                <h3 id="employeeFormTitleFsc">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertFsc" class="secondary-btn" type="button">📎 Bulk Upload FSC Files</button>
-                  <button id="showBulkUploadFsc" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertFsc" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadFsc" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditFsc" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -530,7 +526,7 @@
                     <span class="step-num fsc-step">FSC</span>
                     <div>
                       <strong>Bulk Upload FSC Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -598,7 +594,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFsc" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FSC Status</th><th>FSC Issue</th><th>FSC Expiry</th><th>FSC Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -635,10 +631,10 @@
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleFac">Add Employee</h3>
+                <h3 id="employeeFormTitleFac">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertFac" class="secondary-btn" type="button">📎 Bulk Upload FAC Files</button>
-                  <button id="showBulkUploadFac" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertFac" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadFac" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditFac" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -667,7 +663,7 @@
                     <span class="step-num fac-step">FAC</span>
                     <div>
                       <strong>Bulk Upload FAC Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -735,7 +731,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFac" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FAC Status</th><th>FAC Issue</th><th>FAC Expiry</th><th>FAC Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -765,17 +761,17 @@
         <!-- ── FH CERTIFICATES ────────────────────────────────────── -->
         <section id="fh" class="view">
           <div class="section-heading">
-            <div><h2><span class="cert-type-badge fh-badge">FH</span> Food Handler Certificate</h2><p>Add staff, bulk-upload FH certificate files, and manage Food Handler records.</p></div>
+            <div><h2><span class="cert-type-badge fh-badge">FH</span> Food Handler Certificate</h2><p>Who is covered, who is close, and who needs a nudge. Renew before it lapses.</p></div>
           </div>
 
           <!-- editor-only panels -->
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleFh">Add Employee</h3>
+                <h3 id="employeeFormTitleFh">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertFh" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
-                  <button id="showBulkUploadFh" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertFh" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadFh" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditFh" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -804,7 +800,7 @@
                     <span class="step-num bfs-step">FH</span>
                     <div>
                       <strong>Bulk Upload BFS Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -872,7 +868,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFh" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FH Status</th><th>FH Issue</th><th>FH Expiry</th><th>FH Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -902,17 +898,17 @@
         <!-- ── FA CERTIFICATES ────────────────────────────────────── -->
         <section id="fa" class="view">
           <div class="section-heading">
-            <div><h2><span class="cert-type-badge fa-badge">FA</span> First Aid Certificate</h2><p>Add staff, bulk-upload FA certificate files, and manage First Aid records.</p></div>
+            <div><h2><span class="cert-type-badge fa-badge">FA</span> First Aid Certificate</h2><p>Who is covered, who is close, and who needs a nudge. Renew before it lapses.</p></div>
           </div>
 
           <!-- editor-only panels -->
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleFa">Add Employee</h3>
+                <h3 id="employeeFormTitleFa">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertFa" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
-                  <button id="showBulkUploadFa" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertFa" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadFa" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditFa" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -941,7 +937,7 @@
                     <span class="step-num bfs-step">FA</span>
                     <div>
                       <strong>Bulk Upload BFS Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -1009,7 +1005,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFa" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FA Status</th><th>FA Issue</th><th>FA Expiry</th><th>FA Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -1039,17 +1035,17 @@
         <!-- ── FS CERTIFICATES ────────────────────────────────────── -->
         <section id="fs" class="view">
           <div class="section-heading">
-            <div><h2><span class="cert-type-badge fs-badge">FS</span> Fire Safety Certificate</h2><p>Add staff, bulk-upload FS certificate files, and manage Fire Safety records.</p></div>
+            <div><h2><span class="cert-type-badge fs-badge">FS</span> Fire Safety Certificate</h2><p>Who is covered, who is close, and who needs a nudge. Renew before it lapses.</p></div>
           </div>
 
           <!-- editor-only panels -->
           <div class="editor-only">
             <section class="panel">
               <div class="panel-heading add-emp-heading">
-                <h3 id="employeeFormTitleFs">Add Employee</h3>
+                <h3 id="employeeFormTitleFs">Employees</h3>
                 <div class="panel-heading-actions">
-                  <button id="showBulkCertFs" class="secondary-btn" type="button">📎 Bulk Upload BFS Files</button>
-                  <button id="showBulkUploadFs" class="secondary-btn" type="button">⬆ Bulk Upload Employees</button>
+                  <button id="showBulkCertFs" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadFs" class="secondary-btn" type="button">Import CSV</button>
                   <button id="cancelEmployeeEditFs" class="secondary-btn hidden" type="button">Cancel Edit</button>
                 </div>
               </div>
@@ -1078,7 +1074,7 @@
                     <span class="step-num bfs-step">FS</span>
                     <div>
                       <strong>Bulk Upload BFS Certificate Files</strong>
-                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder — files already uploaded are skipped automatically.</p>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
                       <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
                         <label class="bulk-cert-file-label">
                           Select files (PDF / image)
@@ -1146,7 +1142,7 @@
               <table class="staff-table">
                 <thead>
                   <tr>
-                    <th class="bulk-check-th"><input type="checkbox" id="selectAllFs" title="Select all"></th>
+                    <th class="bulk-check-th"></th>
                     <th>Name</th><th>ID</th><th>Dept</th>
                     <th>FS Status</th><th>FS Issue</th><th>FS Expiry</th><th>FS Certificate</th>
                     <th class="editor-only-col">Actions</th>
@@ -1295,5 +1291,45 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="app.js"></script>
-  </body>
+  
+  <!-- ── Bulk Schedule Modal ─────────────────────────────────────── -->
+  <div id="bulkScheduleModal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="bulkScheduleTitle">
+    <div class="modal-panel" style="max-width:480px">
+      <div class="modal-header">
+        <h2 id="bulkScheduleTitle">Bulk Schedule Renewal</h2>
+        <button id="bulkScheduleClose" class="modal-close" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" style="margin-bottom:12px">
+          Setting a renewal date for <strong><span id="bulkScheduleNames"></span></strong>.<br>
+          <small style="color:var(--text-muted)">All non-valid certificates for the selected employees will be scheduled.</small>
+        </p>
+        <form id="bulkScheduleForm">
+          <!-- Editor: free date picker -->
+          <div id="bulkDateWrap" class="form-group">
+            <label for="bulkScheduledDate">Renewal Date</label>
+            <input id="bulkScheduledDate" name="bulkScheduledDate" type="date" />
+          </div>
+          <!-- Ops: slot picker -->
+          <div id="bulkSlotWrap" class="form-group hidden">
+            <label for="bulkScheduledSlot">Select Available Date</label>
+            <select id="bulkScheduledSlot" name="bulkScheduledSlot">
+              <option value="">Select a date...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="bulkScheduleNote">Note <small>(optional)</small></label>
+            <input id="bulkScheduleNote" name="bulkScheduleNote" type="text" placeholder="e.g. Training centre booked" maxlength="120" />
+          </div>
+          <div class="modal-actions">
+            <button type="submit" class="primary-btn">📅 Confirm Schedule</button>
+            <button type="button" id="bulkScheduleClear" class="ghost-btn">Clear Schedules</button>
+            <button type="button" id="bulkScheduleCancel" class="ghost-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</body>
 </html>
