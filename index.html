@@ -68,7 +68,6 @@
           <button class="nav-tab" data-view="fh"  type="button">🍽 Food Handler</button>
           <button class="nav-tab" data-view="fa"  type="button">⛑ First Aid</button>
           <button class="nav-tab" data-view="fs"  type="button">🔥 Fire Safety</button>
-          <button class="nav-tab" data-view="alerts" type="button">🔔 Alerts &amp; Export</button>
         </nav>
 
         <div class="sidebar-panel">
@@ -198,7 +197,7 @@
               </div>
               <div class="table-wrap">
                 <table>
-                  <thead><tr><th>Employee</th><th>Cert</th><th>Expiry</th><th>Status</th><th>Action</th></tr></thead>
+                  <thead><tr><th>Employee</th><th>Cert</th><th>Expiry</th><th>Status</th><th></th></tr></thead>
                   <tbody id="attentionRows"></tbody>
                 </table>
               </div>
@@ -1169,68 +1168,7 @@
           </section>
         </section>
 
-        <!-- ── ALERTS & EXPORT ─────────────────────────────────────── -->
-        <section id="alerts" class="view">
-          <div class="section-heading">
-            <div><h2>Alerts &amp; Export</h2><p>Send certificate renewal reminders by email and download the compliance report.</p></div>
-          </div>
-
-          <div class="alerts-export-grid">
-            <section class="panel editor-only">
-              <div class="panel-heading"><h3>📅 Schedule Dates</h3></div>
-              <p class="muted" style="padding:0 18px;margin:0 0 8px;font-size:13px;">Renewal dates the operations team can schedule employees to. Capacity: 15 per date.</p>
-              <form id="slotForm" class="settings-grid" style="padding:0 18px 12px;">
-                <label>Date
-                  <input name="slotDate" type="date" required />
-                </label>
-                <label>Label <span style="font-weight:400;color:#6b7280">(optional)</span>
-                  <input name="slotLabel" type="text" placeholder="e.g. OHC medical – Karama center" />
-                </label>
-                <button class="primary-btn" type="submit">＋ Add Date</button>
-              </form>
-              <div id="slotList" style="padding:0 18px 16px;"></div>
-            </section>
-            <section class="panel">
-              <div class="panel-heading"><h3>Email Alert Settings</h3></div>
-              <form id="alertSettingsForm" class="settings-grid">
-                <label>Manager email
-                  <input name="managerEmail" type="email" placeholder="manager@calo.app" />
-                </label>
-                <label>Reminder period
-                  <select name="reminderDays">
-                    <option value="90">90 days before expiry</option>
-                    <option value="60">60 days before expiry</option>
-                    <option value="30" selected>30 days before expiry</option>
-                    <option value="14">14 days before expiry</option>
-                    <option value="7">7 days before expiry</option>
-                  </select>
-                </label>
-                <button class="primary-btn" type="submit">Save &amp; Send Mail Alert</button>
-              </form>
-            </section>
-
-            <section class="panel">
-              <div class="panel-heading"><h3>Export</h3></div>
-              <div class="export-actions">
-                <div>
-                  <strong>PDF Report</strong>
-                  <p>Full compliance report with BFS, OHC, FSC &amp; FAC summaries, statuses, and dates.</p>
-                  <button id="exportPdf" class="primary-btn" type="button">Download PDF</button>
-                </div>
-              </div>
-            </section>
-          </div>
-
-          <section class="panel">
-            <div class="panel-heading">
-              <h3>Alert Queue</h3>
-              <button id="prepareAllAlerts" class="secondary-btn" type="button">Send All to Manager</button>
-            </div>
-            <div id="alertQueue"></div>
-          </section>
-        </section>
-
-      </main>
+        </main>
     </div>
 
     <!-- cert upload modal -->
