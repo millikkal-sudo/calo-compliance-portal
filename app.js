@@ -63,12 +63,12 @@ function applyMarket(market) {
   document.title = "Calo Compliance Portal";
   document.querySelectorAll(".nav-tab[data-view]").forEach(function(tab) {
     var view = tab.dataset.view;
-    if (view === "dashboard" || view === "alerts") { tab.classList.remove("hidden"); return; }
+    if (view === "dashboard") { tab.classList.remove("hidden"); return; }
     tab.classList.toggle("hidden", CERT_TYPES.indexOf(view) === -1);
   });
   document.querySelectorAll(".view[id]").forEach(function(v) {
     var id = v.id;
-    if (id === "dashboard" || id === "alerts") { v.classList.remove("cert-view-hidden"); return; }
+    if (id === "dashboard") { v.classList.remove("cert-view-hidden"); return; }
     CERT_TYPES.indexOf(id) !== -1 ? v.classList.remove("cert-view-hidden") : v.classList.add("cert-view-hidden");
   });
   ["bfs","ohc","fsc","fac","fh","fa","fs"].forEach(function(t) {
@@ -91,7 +91,7 @@ let state     = { employees: [], settings: { ...defaultSettings }, slots: [] };
 let session   = null;
 let isEditor  = false;
 let isOps     = false;
-const canSchedule = () => isEditor || isOps;
+const canSchedule = () => isEditor; // HR books renewals; ops share dates in Slack
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const loginView         = document.getElementById("loginView");
@@ -101,7 +101,6 @@ const views             = document.querySelectorAll(".view");
 const tabs              = document.querySelectorAll(".nav-tab");
 const syncStatus        = document.getElementById("syncStatus");
 const syncLabel         = document.getElementById("syncLabel");
-const alertSettingsForm = document.getElementById("alertSettingsForm");
 
 // ── Login ─────────────────────────────────────────────────────────────────────
 document.getElementById("loginForm").addEventListener("submit", async e => {
@@ -682,28 +681,6 @@ document.getElementById("scheduleModalClear").addEventListener("click", async ()
   } catch(err) { setSyncState("error"); showToast(`Failed: ${err.message}`); }
 });
 
-// ── Schedule slots: editor management ─────────────────────────────────────────
-const slotForm = document.getElementById("slotForm");
-slotForm.addEventListener("submit", async e => {
-  e.preventDefault(); if (!isEditor) return;
-  const d = formData(e.currentTarget);
-  const date  = d.slotDate;
-  const label = (d.slotLabel || "").trim();
-  if (!date) return;
-  if (state.slots.some(sl => sl.date === date)) { showToast("That date is already in the list."); return; }
-  setSyncState("syncing");
-  try {
-    const { data, error } = await sb.from("schedule_slots")
-      .insert({ slot_date: date, label: label || null, capacity: 15, market: MARKET })
-      .select().single();
-    if (error) throw error;
-    state.slots.push({ id: data.id, date: data.slot_date, label: data.label || "", capacity: data.capacity ?? 15 });
-    state.slots.sort((a,b) => a.date.localeCompare(b.date));
-    slotForm.reset(); setSyncState("idle"); renderSlots();
-    showToast(`✅ ${fmtDate(date)} added to schedule dates.`);
-  } catch(err) { setSyncState("error"); showToast(`Failed to add date: ${err.message}`); }
-});
-
 async function deleteSlot(id) {
   if (!isEditor) return;
   const slot = state.slots.find(sl => sl.id === id); if (!slot) return;
@@ -1048,7 +1025,6 @@ document.body.addEventListener("click", e => {
   if (a === "upload-cert")  openCertModal(btn.dataset.eid, btn.dataset.type);
   if (a === "schedule-cert") openScheduleModal(btn.dataset.eid, btn.dataset.type);
   if (a === "del-slot")    deleteSlot(btn.dataset.id);
-  if (a === "mail-alert")  openGmailDraft([JSON.parse(btn.dataset.item)]);
 });
 
 // ── Bulk cert file matching ────────────────────────────────────────────────────
@@ -1157,18 +1133,6 @@ async function applyBulkFiles(rows, type) {
   return count;
 }
 
-// ── Alert settings ─────────────────────────────────────────────────────────────
-alertSettingsForm.addEventListener("submit", async e => {
-  e.preventDefault();
-  const d = formData(e.currentTarget);
-  state.settings = { reminderDays: Number(d.reminderDays), managerEmail: (d.managerEmail||"").trim().toLowerCase() };
-  setSyncState("syncing");
-  try { await saveSettingsToDb(state.settings); setSyncState("idle"); } catch(err) { setSyncState("error"); }
-  renderAll();
-  openGmailDraft(getAlertItems().map(summaryToItem));
-});
-document.getElementById("prepareAllAlerts").addEventListener("click", () => openGmailDraft(getAlertItems().map(summaryToItem)));
-document.getElementById("exportPdf").addEventListener("click", exportPDF);
 document.getElementById("exportPdfTop").addEventListener("click", exportPDF);
 
 // ── Gmail draft ────────────────────────────────────────────────────────────────
@@ -1194,13 +1158,12 @@ function render() {
   document.querySelectorAll(".editor-only-col").forEach(el => el.classList.toggle("hidden", !isEditor));
   const badgeEl = document.getElementById("viewerBadge");
   badgeEl.classList.toggle("hidden", isEditor);
-  badgeEl.textContent = isOps ? "🗓 Operations · scheduling access" : "👁 View only";
+  badgeEl.textContent = "👁 View only";
   renderAll();
 }
 function renderAll() {
   renderDeptFilterOptions(); renderDashboard();
   CERT_TYPES.forEach(renderSectionRows);
-  renderAlertSettings(); renderAlertQueue(); renderSlots();
 }
 function renderDeptFilterOptions() {
   const depts = [...new Set(state.employees.map(e=>e.department).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
@@ -1244,7 +1207,7 @@ function renderDashboard() {
       <td>${escHtml(s.cert.label)}</td>
       <td>${fmtDate(s.expiryDate)}</td>
       <td>${badge(s.rawStatus, s.scheduledDate)}</td>
-      <td><button class="send-manager-btn" type="button" data-action="mail-alert" data-item='${escAttr(JSON.stringify(summaryToItem(s)))}'>✉ Send to Manager</button></td>
+      <td>${canSchedule() ? `<button class="schedule-btn" type="button" data-action="schedule-cert" data-eid="${s.emp.id}" data-type="${s.type}">📅 Schedule</button>` : ""}</td>
     </tr>`),
     ...(scheduled.length ? [`<tr><td colspan="5" class="dash-section-divider">📅 Scheduled renewals (${scheduled.length})</td></tr>`] : []),
     ...scheduled.map(s => `<tr class="scheduled-row">
@@ -1405,21 +1368,6 @@ function renderSectionRows(type) {
     </tr>`;
   }), isEditor?9:8, emptyMsg);
 }
-function renderAlertSettings() {
-  alertSettingsForm.elements.reminderDays.value = String(state.settings.reminderDays);
-  alertSettingsForm.elements.managerEmail.value = state.settings.managerEmail||"";
-}
-function renderAlertQueue() {
-  const items = getAlertItems();
-  document.getElementById("alertQueue").innerHTML = items.length
-    ? items.map(s=>`<div class="alert-item">
-        <div><strong>${escHtml(s.emp.name)} · ${escHtml(s.cert.label)} ${escHtml(s.rawStatus.toLowerCase())}</strong>
-        <span>${escHtml(s.emp.department)} · expires ${fmtDate(s.expiryDate)} · ${fmtDays(s.daysLeft)}</span></div>
-        <div class="alert-actions"><button class="primary-btn send-manager-btn" data-action="mail-alert" data-item='${escAttr(JSON.stringify(summaryToItem(s)))}'>✉ Send to Manager</button></div>
-      </div>`).join("")
-    : '<div class="empty-state">No alerts due.</div>';
-}
-
 // ── Certificate logic ──────────────────────────────────────────────────────────
 function getCertSummaries() { return state.employees.flatMap(e=>CERT_TYPES.filter(t=>certApplies(e,t)).map(t=>getCertSummary(e,t))); }
 function getCertSummary(emp,type) {
