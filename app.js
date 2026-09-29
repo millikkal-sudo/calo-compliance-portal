@@ -1228,6 +1228,15 @@ function renderDashboard() {
     `<div class="risk-item"><strong>${escHtml(x.d)}</strong><span>${x.urgent} urgent · ${x.warn} due soon · ${x.total} total</span></div>`
   ).join("")||'<div class="empty-state">No records yet.</div>';
 }
+// Set a status filter even if the hidden <select> is missing that option (older index.html)
+function setStatusFilter(select, val) {
+  if (!select) return;
+  if (![...select.options].some(o => o.value === val)) {
+    const opt = document.createElement("option"); opt.value = val; opt.textContent = val; select.appendChild(opt);
+  }
+  select.value = val;
+}
+
 // ── Status chips: one tap filters, counts always visible ─────────────────────
 function renderStatusChips(type, sfx, baseEmps, active) {
   const select = document.getElementById(`employeeStatusFilter${sfx}`);
@@ -1242,7 +1251,7 @@ function renderStatusChips(type, sfx, baseEmps, active) {
     if (heading) heading.insertAdjacentElement("afterend", row);
     row.addEventListener("click", ev => {
       const chip = ev.target.closest("[data-stat]"); if (!chip) return;
-      select.value = chip.dataset.stat;
+      setStatusFilter(select, chip.dataset.stat);
       renderSectionRows(type);
     });
   }
@@ -1262,8 +1271,7 @@ function renderStatusChips(type, sfx, baseEmps, active) {
 // ── Dashboard tiles jump straight to the filtered list ───────────────────────
 function jumpToSection(type, stat) {
   const sfx = SECTION_SUFFIX[type]; if (!sfx) return;
-  const select = document.getElementById(`employeeStatusFilter${sfx}`);
-  if (select) select.value = stat;
+  setStatusFilter(document.getElementById(`employeeStatusFilter${sfx}`), stat);
   showView(type);
   renderSectionRows(type);
 }
