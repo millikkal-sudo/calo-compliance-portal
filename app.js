@@ -1250,7 +1250,7 @@ function renderStatusChips(type, sfx, baseEmps, active) {
   const count = st => sums.filter(s => matchesStatus(s, st)).length;
   const chips = [
     ["all", "All"], ["Expired", "Expired"], ["Expiring", "Expiring"],
-    ["Missing", "Missing"], ["Scheduled", "Scheduled"], ["Valid", "Valid"],
+    ["Missing", "No dates"], ["NoFile", "No certificate file"], ["Scheduled", "Scheduled"], ["Valid", "Valid"],
   ];
   row.innerHTML = chips.map(([val, label]) => {
     const c = count(val);
@@ -1636,6 +1636,7 @@ function matchesStatus(s, stat){
   if (stat === "all") return true;
   if (stat === "Expiring") return s.status === "Expiring in 30 Days" || s.status === "Expiring in 90 Days";
   if (stat === "Scheduled") return Boolean(s.scheduledDate) && s.rawStatus !== "Valid";
+  if (stat === "NoFile") return !(s.record && s.record.file); // no certificate PDF uploaded yet
   return s.status === stat;
 }
 function fmtDays(d){if(!isFinite(d))return"not recorded";if(d<0)return`${Math.abs(d)} days overdue`;if(d===0)return"expires today";return`${d} days remaining`;}
