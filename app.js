@@ -1528,87 +1528,45 @@ function exportPDF() {
   });
   y+=Math.ceil(tiles.length/tc)*(tH+gap)+18;
 
-  // ── Scheduled Renewals section ───────────────────────────────────────────────
-  if (scheduledSums.length>0) {
-    if(y>580){doc.addPage();y=50;}
-    doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(21,128,61);
-    doc.text("📅  Scheduled Renewals",margin,y);
-    doc.autoTable({
-      startY:y+8, margin:{left:margin,right:margin},
-      head:[["Name","ID","Department","Certificate","Cert Status","Renewal Date","Note"]],
-      body:scheduledSums.sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)).map(s=>[
-        s.emp.name, s.emp.employeeId, s.emp.department,
-        s.cert.label, s.rawStatus,
-        fmtDate(s.scheduledDate),
-        s.scheduleNote||"--"
-      ]),
-      styles:{fontSize:8,cellPadding:5},
-      headStyles:{fillColor:[21,128,61],textColor:255,fontStyle:"bold"},
-      columnStyles:{
-        4:{textColor:[185,28,28],fontStyle:"bold"},
-        5:{textColor:[21,128,61],fontStyle:"bold"},
-      },
-      theme:"grid"
-    });
-    y=doc.lastAutoTable.finalY+26;
-  }
-
-  // ── Unhandled (needs action) section ─────────────────────────────────────────
-  if (unhandled.length>0) {
-    if(y>580){doc.addPage();y=50;}
+  // ── One-page report: needs-action list, trimmed to fit this page ────────────
+  const pageH = doc.internal.pageSize.getHeight();
+  const ROW_H = 18, HEAD_H = 20, FOOT = 60;
+  if (unhandled.length > 0) {
     doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(185,28,28);
-    doc.text("⚠  Needs Immediate Action",margin,y);
+    doc.text(`Needs Immediate Action (${unhandled.length})`,margin,y);
+    const room = Math.max(0, Math.floor((pageH - FOOT - (y + 8) - HEAD_H - 16) / ROW_H));
+    const sorted = unhandled.sort((a,b)=>a.daysLeft-b.daysLeft);
+    const shown = sorted.slice(0, room);
     doc.autoTable({
-      startY:y+8, margin:{left:margin,right:margin},
+      startY:y+8, margin:{left:margin,right:margin,bottom:FOOT},
       head:[["Name","ID","Department","Certificate","Status","Expiry Date","Days"]],
-      body:unhandled.sort((a,b)=>a.daysLeft-b.daysLeft).map(s=>[
+      body:shown.map(s=>[
         s.emp.name, s.emp.employeeId, s.emp.department,
         s.cert.label, s.rawStatus, fmtDate(s.expiryDate),
         isFinite(s.daysLeft)?(s.daysLeft<0?`${Math.abs(s.daysLeft)}d overdue`:`${s.daysLeft}d left`):"--"
       ]),
-      styles:{fontSize:8,cellPadding:5},
+      styles:{fontSize:8,cellPadding:5,overflow:"ellipsize"},
       headStyles:{fillColor:[185,28,28],textColor:255,fontStyle:"bold"},
       columnStyles:{4:{textColor:[185,28,28],fontStyle:"bold"},6:{textColor:[185,28,28]}},
       theme:"grid"
     });
-    y=doc.lastAutoTable.finalY+26;
+    y = doc.lastAutoTable.finalY + 14;
+    if (sorted.length > shown.length) {
+      doc.setFontSize(9);doc.setFont("helvetica","normal");doc.setTextColor(107,114,128);
+      doc.text(`+ ${sorted.length - shown.length} more in the portal.`,margin,y);
+    }
+  } else {
+    doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(21,128,61);
+    doc.text("All clear. Nothing expired or due in the next 30 days.",margin,y);
   }
 
-  // ── Full registers (one per certificate type) ────────────────────────────────
-  const registerColors = { bfs:[22,163,74], ohc:[109,40,217], fsc:[220,38,38], fac:[2,132,199] };
-  CERT_TYPES.forEach(t => {
-    if(y>580){doc.addPage();y=50;}
-    doc.setFontSize(11);doc.setFont("helvetica","bold");doc.setTextColor(17,24,39);
-    doc.text(`${CERTIFICATES[t].label} -- ${CERTIFICATES[t].fullName} (Full Register)`,margin,y);
-    doc.autoTable({
-      startY:y+8,margin:{left:margin,right:margin},
-      head:[["Name","ID","Department","Status","Issue Date","Expiry Date","Renewal Scheduled"]],
-      body:state.employees.filter(e=>certApplies(e,t)).map(e=>{
-        const s=getCertSummary(e,t);
-        return[e.name,e.employeeId,e.department,s.status,fmtDate(s.issueDate),fmtDate(s.expiryDate),s.scheduledDate?fmtDate(s.scheduledDate):"--"];
-      }),
-      styles:{fontSize:8,cellPadding:4},
-      headStyles:{fillColor:registerColors[t]||[55,65,81],textColor:255,fontStyle:"bold"},
-      didParseCell: (data) => {
-        if(data.section==="body"&&data.column.index===3) {
-          const v=data.cell.raw;
-          if(v==="Expired"||v==="Expiring in 30 Days") data.cell.styles.textColor=[185,28,28];
-          else if(v==="Scheduled") data.cell.styles.textColor=[21,128,61];
-          else if(v==="Valid") data.cell.styles.textColor=[21,128,61];
-        }
-      },
-      theme:"grid"
-    });
-    y=doc.lastAutoTable.finalY+26;
-  });
+  // Keep it to a single page no matter what
+  while (doc.internal.getNumberOfPages() > 1) doc.deletePage(doc.internal.getNumberOfPages());
 
-  // ── Footer on every page ─────────────────────────────────────────────────────
-  const pc=doc.internal.getNumberOfPages();
-  for(let p=1;p<=pc;p++){
-    doc.setPage(p);
-    doc.setFontSize(8);doc.setTextColor(156,163,175);
-    doc.text(`UAE Kitchen Compliance Portal · Confidential · Page ${p} of ${pc}`,pageW/2,doc.internal.pageSize.getHeight()-20,{align:"center"});
-  }
+  // ── Footer ───────────────────────────────────────────────────────────────────
+  doc.setPage(1);
+  doc.setFontSize(8);doc.setTextColor(156,163,175);
+  doc.text(`${MARKET_CONFIG[MARKET] ? MARKET_CONFIG[MARKET].navLabel : MARKET} Compliance Portal · Confidential`,pageW/2,pageH-20,{align:"center"});
   doc.save(`${MARKET.toLowerCase()}-kitchen-compliance-${today()}.pdf`);
   showToast("PDF report ready.");
 }
