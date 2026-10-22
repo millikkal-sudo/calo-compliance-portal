@@ -1,0 +1,8 @@
+{
+  "name": "calo-compliance-portal",
+  "private": true,
+  "dependencies": {
+    "jspdf": "2.5.1",
+    "jspdf-autotable": "3.8.2"
+  }
+}
