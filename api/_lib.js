@@ -52,16 +52,19 @@ async function monthThread(market) {
   await db("slack_threads", { method: "POST", body: { market, month, channel: j.channel, ts: j.ts } });
   return { channel: j.channel, ts: j.ts };
 }
-// Every thread reply is a job for HR, so tag the HR people listed in hr_contacts for that market
-async function hrMentions(market) {
+// Tag whoever owns this certificate type (hr_contacts.cert_types; empty = every type)
+async function hrMentions(market, certType) {
   try {
-    const rows = await db(`hr_contacts?market=eq.${encodeURIComponent(market)}&select=slack_user_id`);
-    return rows.map(r => `<@${r.slack_user_id}>`).join(" ");
+    const rows = await db(`hr_contacts?market=eq.${encodeURIComponent(market)}&select=slack_user_id,cert_types`);
+    const ids = rows
+      .filter(r => !r.cert_types || !r.cert_types.length || (certType && r.cert_types.includes(certType)))
+      .map(r => r.slack_user_id);
+    return [...new Set(ids)].map(id => `<@${id}>`).join(" ");
   } catch (e) { return ""; } // table missing or empty: post without tags
 }
-async function postToThread(market, text) {
+async function postToThread(market, text, certType) {
   const t = await monthThread(market);
-  const tags = await hrMentions(market);
+  const tags = await hrMentions(market, certType);
   await slack("chat.postMessage", { channel: t.channel, thread_ts: t.ts, text: tags ? `${tags} ${text}` : text });
 }
 
