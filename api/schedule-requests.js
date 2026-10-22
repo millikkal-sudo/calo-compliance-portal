@@ -81,7 +81,7 @@ module.exports = async (req, res) => {
             }
           }
           if (dry) { out.toHR.push(who); continue; }
-          await postToThread(market, `⏰ *No reply from managers in time:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · expires ${fmt(r.expiry_date)}. HR please book directly.`);
+          await postToThread(market, `⏰ *No reply from managers in time:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · expires ${fmt(r.expiry_date)}. Please book directly.`, c.type);
           await db(`schedule_requests?id=eq.${r.id}`, { method: "PATCH", body: { status: "escalated", responded_at: new Date().toISOString() } });
           await closeDms(r.dm_messages, null, `No reply in time, so HR now has this one: *${e.name}* · ${label}.`);
           out.toHR.push(who);
@@ -106,7 +106,7 @@ module.exports = async (req, res) => {
         try {
           if (!first.length) {
             await db("schedule_requests", { method: "POST", body: { certificate_id: c.id, market, stage: "14", expiry_date: c.expiry_date, status: "escalated", note: "no manager mapped" } });
-            await postToThread(market, `⚠️ *No manager set for ${emp.department}*, please book directly: *${emp.name}* (${emp.employee_id}) · ${CERT_LABELS[c.type] || c.type} · expires ${fmt(c.expiry_date)}`);
+            await postToThread(market, `⚠️ *No manager set for ${emp.department}*, please book directly: *${emp.name}* (${emp.employee_id}) · ${CERT_LABELS[c.type] || c.type} · expires ${fmt(c.expiry_date)}`, c.type);
             out.noManager.push(who); continue;
           }
           const [row] = await db("schedule_requests", { method: "POST", prefer: "return=representation",
