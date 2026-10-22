@@ -52,9 +52,17 @@ async function monthThread(market) {
   await db("slack_threads", { method: "POST", body: { market, month, channel: j.channel, ts: j.ts } });
   return { channel: j.channel, ts: j.ts };
 }
+// Every thread reply is a job for HR, so tag the HR people listed in hr_contacts for that market
+async function hrMentions(market) {
+  try {
+    const rows = await db(`hr_contacts?market=eq.${encodeURIComponent(market)}&select=slack_user_id`);
+    return rows.map(r => `<@${r.slack_user_id}>`).join(" ");
+  } catch (e) { return ""; } // table missing or empty: post without tags
+}
 async function postToThread(market, text) {
   const t = await monthThread(market);
-  await slack("chat.postMessage", { channel: t.channel, thread_ts: t.ts, text });
+  const tags = await hrMentions(market);
+  await slack("chat.postMessage", { channel: t.channel, thread_ts: t.ts, text: tags ? `${tags} ${text}` : text });
 }
 
 // Replace the buttons in every DM for this request (except the one the clicker already sees updated)
