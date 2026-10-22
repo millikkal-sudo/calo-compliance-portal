@@ -5,6 +5,7 @@
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/monthly-report", "schedule": "0 5 1 * *" }
+    { "path": "/api/monthly-report", "schedule": "0 5 1 * *" },
+    { "path": "/api/schedule-requests", "schedule": "0 5 * * *" }
   ]
 }
