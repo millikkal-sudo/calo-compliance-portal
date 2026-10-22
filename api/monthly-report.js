@@ -5,7 +5,7 @@
 //   SLACK_BOT_TOKEN            xoxb-... from your Slack app (scope: files:write)
 //   SLACK_CHANNEL_ID           private channel ID (C0...); invite the bot to it
 //   CRON_SECRET                any long random string
-// Optional: SLACK_CHANNEL_ID_UAE / SLACK_CHANNEL_ID_QATAR to split markets into different channels.
+// SLACK_CHANNEL_ID is the UAE channel. Add SLACK_CHANNEL_ID_QATAR to send Qatar to its own channel.
 // Manual test in a browser:
 //   /api/monthly-report?key=CRON_SECRET&dry=1&market=UAE   -> shows the PDF, posts nothing
 //   /api/monthly-report?key=CRON_SECRET                    -> posts now
@@ -171,7 +171,10 @@ module.exports = async (req, res) => {
         res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
         return res.status(200).send(pdf.buffer);
       }
-      const channel = process.env[`SLACK_CHANNEL_ID_${market.toUpperCase()}`] || process.env.SLACK_CHANNEL_ID;
+      // Each market posts only to its own channel. SLACK_CHANNEL_ID is the UAE channel.
+      // Qatar is skipped until SLACK_CHANNEL_ID_QATAR is set in Vercel.
+      const channel = process.env[`SLACK_CHANNEL_ID_${market.toUpperCase()}`] || (market === "UAE" ? process.env.SLACK_CHANNEL_ID : null);
+      if (!channel) { results[market] = "skipped: no Slack channel set for this market"; continue; }
       const comment = `*${MARKETS[market].label} compliance · ${month}*\n${pdf.actionNeeded} need action now · ${pdf.unhandled} not booked yet · ${pdf.scheduled} already booked`;
       await uploadToSlack(channel, filename, pdf.buffer, comment);
       results[market] = "sent";
