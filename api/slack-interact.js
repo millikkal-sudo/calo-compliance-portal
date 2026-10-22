@@ -40,6 +40,7 @@ async function handle(p, action) {
     const label = CERT_LABELS[type] || type.toUpperCase();
     if (r.status !== "sent") { await reply(p.response_url, done(`Already handled (${r.status}): *${e.name}* · ${label}.`)); return; }
     const nowIso = new Date().toISOString();
+    const picker = p.user?.name || p.user?.username || "a manager"; // shown as plain text so the manager isn't pinged
     const sameCycle = `schedule_requests?certificate_id=eq.${r.certificate_id}&expiry_date=eq.${r.expiry_date}&status=eq.sent`;
 
     if (action.action_id === "book_submit") {
@@ -54,16 +55,16 @@ async function handle(p, action) {
       if (!claimed.length) { await reply(p.response_url, done(`Already handled by someone else: *${e.name}* · ${label}.`)); return; }
       await db(`certificates?id=eq.${r.certificate_id}`, { method: "PATCH", body: {
         scheduled_date: date, schedule_note: `Booked via Slack by ${p.user?.name || p.user?.username || p.user?.id}`, updated_at: nowIso } });
-      await postToThread(r.market, `✅ *Please book:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · *${fmtDay(date)} ${date.slice(0, 4)}* · expires ${fmt(r.expiry_date)} · picked by <@${p.user?.id}>`);
+      await postToThread(r.market, `✅ *Please book:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · *${fmtDay(date)} ${date.slice(0, 4)}* · expires ${fmt(r.expiry_date)} · scheduled by ${picker}`);
       await reply(p.response_url, done(`✅ *Booked:* *${e.name}* · ${label} on *${fmtDay(date)}*.\nHR has it, and the portal now shows Scheduled.`));
-      await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `✅ Booked by <@${p.user?.id}>: *${e.name}* · ${label} on *${fmtDay(date)}*. Nothing to do.`);
+      await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `✅ Scheduled by ${picker}: *${e.name}* · ${label} on *${fmtDay(date)}*. Nothing to do.`);
     } else if (action.action_id === "book_decline") {
       const claimed = await db(sameCycle, { method: "PATCH", prefer: "return=representation",
         body: { status: "declined", responded_by: p.user?.id, responded_at: nowIso } });
       if (!claimed.length) { await reply(p.response_url, done(`Already handled by someone else: *${e.name}* · ${label}.`)); return; }
-      await postToThread(r.market, `❗ *Needs HR:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · expires ${fmt(r.expiry_date)} · <@${p.user?.id}> can't schedule this one.`);
+      await postToThread(r.market, `❗ *Needs HR:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · expires ${fmt(r.expiry_date)} · ${picker} can't schedule this one.`);
       await reply(p.response_url, done(`Sent to HR: *${e.name}* · ${label}. They'll take it from here.`));
-      await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `Sent to HR by <@${p.user?.id}>: *${e.name}* · ${label}. Nothing to do.`);
+      await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `Sent to HR by ${picker}: *${e.name}* · ${label}. Nothing to do.`);
     }
   } catch (err) {
     console.error("slack-interact:", err);
