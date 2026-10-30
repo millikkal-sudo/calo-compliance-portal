@@ -65,6 +65,7 @@
           <button class="nav-tab" data-view="ohc" type="button">🩺 OHC Certificates</button>
           <button class="nav-tab" data-view="fsc" type="button">🔥 FSC Certificates</button>
           <button class="nav-tab" data-view="fac" type="button">⛑ FAC Certificates</button>
+          <button class="nav-tab" data-view="pic" type="button">🎓 PIC Certificates</button>
           <button class="nav-tab" data-view="fh"  type="button">🍽 Food Handler</button>
           <button class="nav-tab" data-view="fa"  type="button">⛑ First Aid</button>
           <button class="nav-tab" data-view="fs"  type="button">🔥 Fire Safety</button>
@@ -152,6 +153,17 @@
                 <div class="cert-stat bad"><span>Expired</span><strong id="facExpiredMetric">0</strong></div>
                 <div class="cert-stat neutral"><span>Missing</span><strong id="facMissingMetric">0</strong></div>
                 <div class="cert-stat sched"><span>Scheduled</span><strong id="facScheduledMetric">0</strong></div>
+              </div>
+            </section>
+            <section class="panel cert-overview-panel" id="picOverview">
+              <div class="panel-heading"><h3><span class="cert-type-badge pic-badge">PIC</span> Person In Charge</h3></div>
+              <div class="cert-stat-grid">
+                <div class="cert-stat good"><span>Valid</span><strong id="picValidMetric">0</strong></div>
+                <div class="cert-stat watch"><span>Expiring 90d</span><strong id="picNinetyMetric">0</strong></div>
+                <div class="cert-stat warn"><span>Expiring 30d</span><strong id="picThirtyMetric">0</strong></div>
+                <div class="cert-stat bad"><span>Expired</span><strong id="picExpiredMetric">0</strong></div>
+                <div class="cert-stat neutral"><span>Missing</span><strong id="picMissingMetric">0</strong></div>
+                <div class="cert-stat sched"><span>Scheduled</span><strong id="picScheduledMetric">0</strong></div>
               </div>
             </section>
           </div>
@@ -753,6 +765,144 @@
             <form id="certificateFormFac" class="employee-quick-form">
               <input name="employeeId" type="hidden" />
               <input name="type" type="hidden" value="fac" />
+              <label>Issue date  <input name="issueDate"  type="date" required /></label>
+              <label>Expiry date <input name="expiryDate" type="date" required /></label>
+              <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
+              <button class="primary-btn" type="submit">Save Certificate</button>
+            </form>
+          </section>
+        </section>
+
+        <!-- ── PIC CERTIFICATES ────────────────────────────────────── -->
+        <section id="pic" class="view">
+          <div class="section-heading">
+            <div><h2><span class="cert-type-badge pic-badge">PIC</span> Person In Charge</h2><p>Only the people you pick need PIC. Add them here with their Employee ID. Valid for 5 years from the issue date.</p></div>
+          </div>
+
+          <!-- editor-only panels -->
+          <div class="editor-only">
+            <section class="panel">
+              <div class="panel-heading add-emp-heading">
+                <h3 id="employeeFormTitlePic">Employees</h3>
+                <div class="panel-heading-actions">
+                  <button id="showBulkCertPic" class="secondary-btn" type="button">Attach files</button>
+                  <button id="showBulkUploadPic" class="secondary-btn" type="button">Import CSV</button>
+                  <button id="cancelEmployeeEditPic" class="secondary-btn hidden" type="button">Cancel Edit</button>
+                </div>
+              </div>
+
+              <form id="employeeFormPic" class="employee-quick-form" data-cert-type="pic">
+                <input name="editingId" type="hidden" />
+                <label>Name <input name="name" required placeholder="Aisha Rahman" /></label>
+                <label>Employee ID <input name="employeeId" required placeholder="CK-1024" /></label>
+                <label>Department
+                  <select name="department" required>
+                    <option value="">Select</option>
+                    <option value="Kitchen">Kitchen</option>
+                    <option value="Dispatch">Dispatch</option>
+                    <option value="Warehouse">Warehouse</option>
+                    <option value="Cafe">Cafe</option>
+                  </select>
+                </label>
+                <label>PIC Issue Date <input name="picIssueDate" type="date" /></label>
+                <button id="employeeSubmitButtonPic" class="primary-btn" type="submit">Add Employee</button>
+              </form>
+
+              <!-- Bulk cert files (toggled) -->
+              <div id="bulkCertSectionPic" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num fac-step">PIC</span>
+                    <div>
+                      <strong>Bulk Upload PIC Certificate Files</strong>
+                      <p>Name files by Employee ID (e.g. <strong>CK-1024.pdf</strong>). Pick files or a whole folder. Anything already uploaded gets skipped.</p>
+                      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+                        <label class="bulk-cert-file-label">
+                          Select files (PDF / image)
+                          <input id="bulkCertInputPic" type="file" accept=".pdf,image/*" multiple />
+                        </label>
+                        <label class="bulk-cert-file-label">
+                          📁 Select whole folder
+                          <input id="bulkCertFolderPic" type="file" webkitdirectory multiple />
+                        </label>
+                      </div>
+                      <div id="bulkCertPreviewPic" class="bulk-preview hidden" style="margin-top:8px;"></div>
+                      <div id="bulkCertActionsPic" class="bulk-cert-actions hidden" style="margin-top:8px;">
+                        <button id="bulkCertConfirmPic" class="primary-btn" type="button">Attach Files</button>
+                        <button id="bulkCertClearPic" class="secondary-btn" type="button">Clear</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Bulk employee CSV (toggled) -->
+              <div id="bulkEmpSectionPic" class="bulk-emp-section hidden">
+                <div class="bulk-emp-steps">
+                  <div class="bulk-emp-step">
+                    <span class="step-num">1</span>
+                    <div>
+                      <strong>Download the CSV template</strong>
+                      <p>Fill it in: Employee ID, Name, Department, PIC Issue Date.</p>
+                      <button id="downloadEmployeeTemplatePic" class="secondary-btn" type="button" data-cert-type="pic">Download Template</button>
+                    </div>
+                  </div>
+                  <div class="bulk-emp-step">
+                    <span class="step-num">2</span>
+                    <div>
+                      <strong>Upload the filled CSV</strong>
+                      <p>Existing employees (matched by ID) will be updated. New ones will be added.</p>
+                      <form id="bulkUploadFormPic" class="inline-upload">
+                        <input name="csvFile" type="file" accept=".csv,text/csv" required />
+                        <button class="primary-btn" type="submit">Upload &amp; Import</button>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <section class="panel">
+            <div class="panel-heading table-tools">
+              <h3>PIC Register</h3>
+              <input id="employeeSearchPic" type="search" placeholder="Search name or ID…" />
+              <select id="employeeDepartmentFilterPic">
+                <option value="all">All departments</option>
+              </select>
+              <select id="employeeStatusFilterPic">
+                <option value="all">All statuses</option>
+                <option value="Valid">Valid</option>
+                <option value="Expiring">Expiring</option>
+                <option value="Expired">Expired</option>
+                <option value="Missing">Missing</option>
+                <option value="Scheduled">Scheduled</option>
+                <option value="NoFile">No certificate file</option>
+              </select>
+            </div>
+            <div class="table-wrap">
+              <table class="staff-table">
+                <thead>
+                  <tr>
+                    <th class="bulk-check-th"></th>
+                    <th>Name</th><th>ID</th><th>Dept</th>
+                    <th>PIC Status</th><th>PIC Issue</th><th>PIC Expiry</th><th>PIC Certificate</th>
+                    <th class="editor-only-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="staffRowsPic"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="certEditPanelPic" class="panel hidden editor-only">
+            <div class="panel-heading">
+              <h3 id="certEditTitlePic">Edit Certificate</h3>
+              <button id="cancelCertEditPic" class="secondary-btn" type="button">Cancel</button>
+            </div>
+            <form id="certificateFormPic" class="employee-quick-form">
+              <input name="employeeId" type="hidden" />
+              <input name="type" type="hidden" value="pic" />
               <label>Issue date  <input name="issueDate"  type="date" required /></label>
               <label>Expiry date <input name="expiryDate" type="date" required /></label>
               <label>Certificate file <input name="file" type="file" accept=".pdf,image/*" /></label>
