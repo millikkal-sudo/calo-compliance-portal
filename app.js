@@ -14,9 +14,10 @@ const MARKET_CONFIG = {
       ohc: { label: "OHC", fullName: "Occupational Health Card", validYears: 1 },
       fsc: { label: "FSC", fullName: "Fire Safety Certificate",  validYears: 2 },
       fac: { label: "FAC", fullName: "First Aid Certificate",    validYears: 2 },
+      pic: { label: "PIC", fullName: "Person In Charge",         validYears: 5 },
     },
-    sectionSuffix:  { bfs: "Bfs", ohc: "Ohc", fsc: "Fsc", fac: "Fac" },
-    certGroups:     [["bfs","ohc"], ["fsc"], ["fac"]],
+    sectionSuffix:  { bfs: "Bfs", ohc: "Ohc", fsc: "Fsc", fac: "Fac", pic: "Pic" },
+    certGroups:     [["bfs","ohc"], ["fsc"], ["fac"], ["pic"]], // PIC: only the people you add
     navLabel:       "UAE Kitchen",
   },
   Qatar: {
@@ -71,7 +72,7 @@ function applyMarket(market) {
     if (id === "dashboard") { v.classList.remove("cert-view-hidden"); return; }
     CERT_TYPES.indexOf(id) !== -1 ? v.classList.remove("cert-view-hidden") : v.classList.add("cert-view-hidden");
   });
-  ["bfs","ohc","fsc","fac","fh","fa","fs"].forEach(function(t) {
+  ["bfs","ohc","fsc","fac","pic","fh","fa","fs"].forEach(function(t) {
     var p = document.getElementById(t + "Overview");
     if (p) p.classList.toggle("cert-view-hidden", CERT_TYPES.indexOf(t) === -1);
   });
@@ -955,16 +956,38 @@ function editEmployee(id, type) {
   showView(type); setEmployeeFormOpen(type, true); form.elements.name.focus();
   form.scrollIntoView({ behavior: "smooth", block: "start" });
 }
-async function deleteEmployee(id) {
+// "Remove" takes the person off THIS section only (and its linked list: BFS + OHC go together).
+// Their other certificates stay. The employee record is deleted only when no list is left.
+async function deleteEmployee(id, section) {
   if (!isEditor) return;
   const e = state.employees.find(x => x.id === id);
-  if (!e || !confirm(`Remove ${e.name}?`)) return;
-  // Delete storage files first
-  for (const t of CERT_TYPES) { if (e.certificates[t]?.file?.filePath) await deleteStorageFile(e.certificates[t].file.filePath); }
-  state.employees = state.employees.filter(x => x.id !== id);
-  renderAll(); setSyncState("syncing");
-  try { await deleteEmployeeFromDb(id); setSyncState("idle"); } catch(err) { setSyncState("error"); showToast(`Delete failed: ${err.message}`); }
-  showToast("Employee removed.");
+  if (!e) return;
+  const types = section ? getCertGroup(section) : CERT_TYPES;
+  const label = types.map(t => CERTIFICATES[t] ? CERTIFICATES[t].label : t.toUpperCase()).join(" + ");
+  if (!confirm(`Remove ${e.name} from ${label}?\n\nTheir other certificates stay as they are.`)) return;
+
+  const remaining = Object.keys(e.certificates || {}).filter(t =>
+    !types.includes(t) && ((e._certPresence && e._certPresence.has(t)) || hasCertData(e, t)));
+
+  setSyncState("syncing");
+  try {
+    for (const t of types) {
+      if (e.certificates[t]?.file?.filePath) await deleteStorageFile(e.certificates[t].file.filePath);
+      await deleteCertFromDb(id, t);
+      e.certificates[t] = {};
+      if (e._certIds) e._certIds[t] = null;
+      if (e._certPresence) e._certPresence.delete(t);
+    }
+    if (!remaining.length) {
+      await deleteEmployeeFromDb(id); // on no list any more: remove the person completely
+      state.employees = state.employees.filter(x => x.id !== id);
+    }
+    setSyncState("idle");
+    renderAll();
+    showToast(remaining.length ? `${e.name} removed from ${label}.` : `${e.name} removed.`);
+  } catch (err) {
+    setSyncState("error"); showToast(`Remove failed: ${err.message}`);
+  }
 }
 async function clearCertificate(empId, type) {
   if (!isEditor) return;
@@ -1019,7 +1042,7 @@ document.body.addEventListener("click", e => {
   const btn = e.target.closest("[data-action]"); if (!btn) return;
   const a = btn.dataset.action;
   if (a === "edit-emp")    editEmployee(btn.dataset.id, btn.dataset.section);
-  if (a === "del-emp")     deleteEmployee(btn.dataset.id);
+  if (a === "del-emp")     deleteEmployee(btn.dataset.id, btn.dataset.section);
   if (a === "edit-cert")   showCertEdit(btn.dataset.eid, btn.dataset.type);
   if (a === "del-cert")    clearCertificate(btn.dataset.eid, btn.dataset.type);
   if (a === "upload-cert")  openCertModal(btn.dataset.eid, btn.dataset.type);
@@ -1359,7 +1382,7 @@ function renderSectionRows(type) {
       ? `<button class="schedule-btn ${s.status==="Scheduled"?"scheduled-active":""}" title="${s.status==="Scheduled"?`Scheduled: ${fmtDate(s.scheduledDate)}`:"Schedule renewal"}" data-action="schedule-cert" data-eid="${e.id}" data-type="${type}">${s.status==="Scheduled"?"Reschedule":"📅 Schedule"}</button>` : "";
     const editorActions = isEditor ? `
       <button class="text-btn" data-action="edit-emp" data-id="${e.id}" data-section="${type}">Edit</button>
-      <button class="text-btn danger" data-action="del-emp" data-id="${e.id}">Remove</button>` : "";
+      <button class="text-btn danger" data-action="del-emp" data-id="${e.id}" data-section="${type}">Remove</button>` : "";
     return `<tr class="${bulkSelectedEmpIds.has(e.id) ? "bulk-selected-row" : ""}">
       ${checkCell}
       <td><strong>${escHtml(e.name)}</strong></td><td>${escHtml(e.employeeId)}</td><td>${escHtml(e.department)}</td>
