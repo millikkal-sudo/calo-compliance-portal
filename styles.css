@@ -781,3 +781,6 @@ tr.bulk-selected-row > td { background:var(--fill-brand-light); }
 .date-cell { white-space:nowrap; }
 .panel-heading.add-emp-heading { border-bottom:none; }
 .employee-quick-form, .bulk-emp-section { border-top:1px solid var(--border-default); }
+
+/* PIC (Person In Charge): categorical accent, green tint so it reads apart from the others */
+.pic-badge { background:var(--fill-brand-light); color:var(--brand-90); border:1px solid var(--brand-40); }
