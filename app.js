@@ -1192,6 +1192,7 @@ function renderDeptFilterOptions() {
   const depts = [...new Set(state.employees.map(e=>e.department).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
   CERT_TYPES.forEach(type => {
     const el  = document.getElementById(`employeeDepartmentFilter${SECTION_SUFFIX[type]}`);
+    if (!el) return; // section not on this page version
     const cur = el.value || "all";
     el.innerHTML = ['<option value="all">All departments</option>', ...depts.map(d=>`<option value="${escHtml(d)}">${escHtml(d)}</option>`)].join("");
     el.value = depts.includes(cur) ? cur : "all";
@@ -1212,6 +1213,7 @@ function renderDashboard() {
   const pill = document.getElementById("overallStatus");
   pill.textContent = uc ? "Action Needed" : "Compliant"; pill.classList.toggle("risk", Boolean(uc));
   CERT_TYPES.forEach(type => {
+    if (!document.getElementById(`${type}ValidMetric`)) return; // card not on this page version: skip, don't break the dashboard
     const typeSums = state.employees.filter(e=>certApplies(e,type)).map(e=>getCertSummary(e,type));
     // Count by REAL status (expiry-date based) -- scheduling never moves a cert out of these boxes
     const tb = countBy(typeSums,"rawStatus");
@@ -1325,6 +1327,8 @@ function setEmployeeFormOpen(type, open) {
 
 function renderSectionRows(type) {
   const sfx  = SECTION_SUFFIX[type];
+  // Section missing from index.html (e.g. app.js updated before index.html): skip it instead of blanking every list
+  if (!sfx || !document.getElementById(`staffRows${sfx}`) || !document.getElementById(`employeeSearch${sfx}`)) return;
   const q    = document.getElementById(`employeeSearch${sfx}`).value.trim().toLowerCase();
   const dept = document.getElementById(`employeeDepartmentFilter${sfx}`).value;
   const stat = document.getElementById(`employeeStatusFilter${sfx}`).value;
