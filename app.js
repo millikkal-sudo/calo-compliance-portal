@@ -1689,6 +1689,20 @@ function renderEidPanel(type, sfx) {
     panel.className = "panel eid-panel";
     register.parentElement.insertBefore(panel, register);
     panel.addEventListener("click", async ev => {
+      const rm = ev.target.closest("[data-remove-eid]");
+      if (rm) { // joiner left / added by mistake: remove from the portal completely
+        const emp = state.employees.find(x => x.id === rm.dataset.removeEid);
+        if (!emp || !isEditor) return;
+        if (!confirm(`Remove ${emp.name} (${emp.employeeId}) from the portal completely?\n\nUse this if they left or were added by mistake. Their BFS and any other records are deleted too.`)) return;
+        rm.disabled = true; setSyncState("syncing");
+        try {
+          for (const t of Object.keys(emp.certificates || {})) { const f = emp.certificates[t] && emp.certificates[t].file; if (f && f.filePath) await deleteStorageFile(f.filePath); }
+          await deleteEmployeeFromDb(emp.id);
+          state.employees = state.employees.filter(x => x.id !== emp.id);
+          setSyncState("idle"); renderAll(); showToast(`${emp.name} removed.`);
+        } catch (err) { setSyncState("error"); rm.disabled = false; showToast(`Could not remove: ${err.message}`); }
+        return;
+      }
       const btn = ev.target.closest("[data-confirm-eid]"); if (!btn) return;
       const emp = state.employees.find(x => x.id === btn.dataset.confirmEid);
       if (!emp || !confirm(`${emp.name} has their Emirates ID?\n\nThey'll move into the OHC list, and their supervisors get a Slack message to pick an OHC appointment date.`)) return;
@@ -1705,7 +1719,8 @@ function renderEidPanel(type, sfx) {
     <div class="table-wrap"><table><thead><tr><th>Name</th><th>ID</th><th>Dept</th><th>Added</th><th></th></tr></thead><tbody>
     ${list.map(e => `<tr><td><strong>${escHtml(e.name)}</strong></td><td>${escHtml(e.employeeId)}</td><td>${escHtml(e.department)}</td>
       <td class="date-cell">${e.createdAt ? fmtDate(String(e.createdAt).slice(0, 10)) : "--"}</td>
-      <td>${can ? `<button class="secondary-btn eid-btn" type="button" data-confirm-eid="${e.id}">✓ Emirates ID received</button>` : `<span class="badge neutral">Waiting</span>`}</td></tr>`).join("")}
+      <td class="eid-actions">${can ? `<button class="secondary-btn eid-btn" type="button" data-confirm-eid="${e.id}">✓ Emirates ID received</button>` : `<span class="badge neutral">Waiting</span>`}
+        ${isEditor ? `<button class="text-btn danger" type="button" data-remove-eid="${e.id}">Remove</button>` : ""}</td></tr>`).join("")}
     </tbody></table></div>`;
 }
 
