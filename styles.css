@@ -823,3 +823,8 @@ tr.bulk-selected-row > td { background:var(--fill-brand-light); }
 #requests .section-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
 .eid-actions { white-space:nowrap; }
 .eid-actions .text-btn { margin-left:6px; }
+.eid-noneed { padding:10px 20px 14px; border-top:1px solid var(--border-default); }
+.eid-noneed summary { cursor:pointer; font:700 13px/20px var(--font); color:var(--content-secondary); }
+.eid-noneed-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.eid-noneed-item { display:inline-flex; align-items:center; gap:6px; background:var(--bg-elevated); border-radius:var(--radius-full); padding:4px 6px 4px 12px; font-size:13px; }
+.eid-empty { padding:12px 20px 0; font-size:13px; }
