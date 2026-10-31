@@ -45,7 +45,7 @@ function summarise(market, emps, certs) {
   for (const e of emps) {
     const mine = byEmp.get(e.id) || {};
     for (const type of Object.keys(cfg.certs)) {
-      if (type === "ohc" && e.eid_confirmed === false) continue; // new joiner still waiting for Emirates ID
+      if (type === "ohc" && (e.eid_confirmed === false || e.ohc_not_needed === true)) continue; // waiting for Emirates ID, or OHC not needed
       const group = cfg.groups.find(g => g.includes(type)) || [type];
       if (!group.some(t => mine[t])) continue;
       const c = mine[type] || {};
@@ -84,7 +84,7 @@ function buildPdf(market, emps, sums) {
     { label: "ACTION NEEDED", value: actionNeeded, tone: "bad" },
     { label: "SCHEDULED RENEWALS", value: scheduled.length, tone: "good" },
     { label: "UNHANDLED", value: unhandled.length, tone: "bad" },
-    ...(market === "UAE" ? [{ label: "AWAITING EMIRATES ID", value: emps.filter(e => e.eid_confirmed === false).length }] : []),
+    ...(market === "UAE" ? [{ label: "AWAITING EMIRATES ID", value: emps.filter(e => e.eid_confirmed === false && e.ohc_not_needed !== true).length }] : []),
   ];
   const tc = 5, gap = 8, tH = 52, tW = (pageW - margin*2 - gap*(tc-1)) / tc;
   tiles.forEach((t, i) => {
@@ -162,8 +162,9 @@ module.exports = async (req, res) => {
     for (const market of Object.keys(MARKETS)) {
       if (only && only !== market) continue;
       const [emps, certs] = await Promise.all([
-        fetchAll("employees", "id,name,employee_id,department,eid_confirmed", market)
-          .catch(() => fetchAll("employees", "id,name,employee_id,department", market)), // before the Emirates ID column exists
+        fetchAll("employees", "id,name,employee_id,department,eid_confirmed,ohc_not_needed", market)
+          .catch(() => fetchAll("employees", "id,name,employee_id,department,eid_confirmed", market))
+          .catch(() => fetchAll("employees", "id,name,employee_id,department", market)), // older database without these columns
         fetchAll("certificates", "employee_id,type,expiry_date,scheduled_date", market),
       ]);
       if (!emps.length) { results[market] = "skipped: no employees"; continue; }
