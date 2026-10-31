@@ -14,7 +14,7 @@ const autoTable = require("jspdf-autotable").default;
 
 const SUPABASE_URL = "https://iflquskysqchhbywvmow.supabase.co";
 const MARKETS = {
-  UAE:   { label: "UAE Kitchen",   certs: { bfs: "BFS", ohc: "OHC", fsc: "FSC", fac: "FAC" }, groups: [["bfs","ohc"],["fsc"],["fac"]] },
+  UAE:   { label: "UAE Kitchen",   certs: { bfs: "BFS", ohc: "OHC", fsc: "FSC", fac: "FAC", pic: "PIC" }, groups: [["bfs","ohc"],["fsc"],["fac"],["pic"]] },
   Qatar: { label: "Qatar Kitchen", certs: { fh: "FH", fa: "FA", fs: "FS" },                   groups: [["fh"],["fa"],["fs"]] },
 };
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -45,6 +45,7 @@ function summarise(market, emps, certs) {
   for (const e of emps) {
     const mine = byEmp.get(e.id) || {};
     for (const type of Object.keys(cfg.certs)) {
+      if (type === "ohc" && e.eid_confirmed === false) continue; // new joiner still waiting for Emirates ID
       const group = cfg.groups.find(g => g.includes(type)) || [type];
       if (!group.some(t => mine[t])) continue;
       const c = mine[type] || {};
@@ -83,6 +84,7 @@ function buildPdf(market, emps, sums) {
     { label: "ACTION NEEDED", value: actionNeeded, tone: "bad" },
     { label: "SCHEDULED RENEWALS", value: scheduled.length, tone: "good" },
     { label: "UNHANDLED", value: unhandled.length, tone: "bad" },
+    ...(market === "UAE" ? [{ label: "AWAITING EMIRATES ID", value: emps.filter(e => e.eid_confirmed === false).length }] : []),
   ];
   const tc = 5, gap = 8, tH = 52, tW = (pageW - margin*2 - gap*(tc-1)) / tc;
   tiles.forEach((t, i) => {
@@ -160,7 +162,8 @@ module.exports = async (req, res) => {
     for (const market of Object.keys(MARKETS)) {
       if (only && only !== market) continue;
       const [emps, certs] = await Promise.all([
-        fetchAll("employees", "id,name,employee_id,department", market),
+        fetchAll("employees", "id,name,employee_id,department,eid_confirmed", market)
+          .catch(() => fetchAll("employees", "id,name,employee_id,department", market)), // before the Emirates ID column exists
         fetchAll("certificates", "employee_id,type,expiry_date,scheduled_date", market),
       ]);
       if (!emps.length) { results[market] = "skipped: no employees"; continue; }
