@@ -69,12 +69,12 @@ function applyMarket(market) {
   document.title = "Calo Compliance Portal";
   document.querySelectorAll(".nav-tab[data-view]").forEach(function(tab) {
     var view = tab.dataset.view;
-    if (view === "dashboard") { tab.classList.remove("hidden"); return; }
+    if (view === "dashboard" || view === "requests") { tab.classList.remove("hidden"); return; }
     tab.classList.toggle("hidden", CERT_TYPES.indexOf(view) === -1);
   });
   document.querySelectorAll(".view[id]").forEach(function(v) {
     var id = v.id;
-    if (id === "dashboard") { v.classList.remove("cert-view-hidden"); return; }
+    if (id === "dashboard" || id === "requests") { v.classList.remove("cert-view-hidden"); return; }
     CERT_TYPES.indexOf(id) !== -1 ? v.classList.remove("cert-view-hidden") : v.classList.add("cert-view-hidden");
   });
   ["bfs","ohc","fsc","fac","pic","fh","fa","fs"].forEach(function(t) {
@@ -172,6 +172,11 @@ document.getElementById("signOutButton").addEventListener("click", async () => {
 // ── Supabase: load ────────────────────────────────────────────────────────────
 async function loadFromSupabase() {
   try {
+    // Department list lives in the database (falls back to the page's built-in list if the table isn't there yet)
+    try {
+      const { data: deps, error: de } = await sb.from("departments").select("name,sort").eq("market", MARKET).order("sort", { ascending: true }).order("name", { ascending: true });
+      state.departments = !de && deps && deps.length ? deps.map(d => d.name) : null;
+    } catch (e) { state.departments = null; }
     const [{ data: emps, error: e1 }, { data: certs, error: e2 }, { data: cfg }, { data: slots }] = await Promise.all([
       sb.from("employees").select("*").eq("market", MARKET).order("created_at", { ascending: false }),
       sb.from("certificates").select("id,employee_id,type,issue_date,expiry_date,file_name,file_path,scheduled_date,schedule_note").eq("market", MARKET),
@@ -372,12 +377,13 @@ function fileLink(f) {
 
 // ── Tab navigation ─────────────────────────────────────────────────────────────
 tabs.forEach(tab => tab.addEventListener("click", () => {
-  tabs.forEach(t => t.classList.toggle("active", t === tab));
-  views.forEach(v => v.classList.toggle("active-view", v.id === tab.dataset.view));
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t === tab));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active-view", v.id === tab.dataset.view));
 }));
 function showView(id) {
-  tabs.forEach(t => t.classList.toggle("active", t.dataset.view === id));
-  views.forEach(v => v.classList.toggle("active-view", v.id === id));
+  document.querySelectorAll(".nav-tab").forEach(t => t.classList.toggle("active", t.dataset.view === id));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("active-view", v.id === id));
+  if (id === "requests") loadSlackRequests();
 }
 
 // ── Cert upload modal ─────────────────────────────────────────────────────────
@@ -1231,11 +1237,7 @@ function render() {
   renderAll();
 }
 // ── New employee: enter the person once, tick the certificates they need ─────
-function neDepartments() {
-  const sel = document.querySelector('[id^="employeeForm"] select[name="department"]');
-  const opts = sel ? [...sel.options].map(o => o.value).filter(v => v && v.toLowerCase() !== "select") : [];
-  return opts.length ? opts : ["Kitchen", "Dispatch", "Warehouse", "Cafe"];
-}
+function neDepartments() { return departmentList(); }
 function neGroups() { return (MARKET_CONFIG[MARKET] && MARKET_CONFIG[MARKET].certGroups) || CERT_TYPES.map(t => [t]); }
 
 function ensureNewEmployeeButton() {
@@ -1287,7 +1289,7 @@ function openNewEmployee() {
   }
   const form = modal.querySelector("#newEmpForm");
   form.reset();
-  form.elements.department.innerHTML = `<option value="">Select</option>` + neDepartments().map(d => `<option>${escHtml(d)}</option>`).join("");
+  fillDepartmentSelect(form.elements.department);
   modal.querySelector("#neCerts").innerHTML = neGroups().map(group => {
     const badges = group.map(t => `<span class="cert-type-badge ${t}-badge">${escHtml(CERTIFICATES[t].label)}</span>`).join(" + ");
     const names = group.map(t => CERTIFICATES[t].fullName).join(" + ");
@@ -1384,8 +1386,143 @@ async function saveNewEmployee(form) {
   } finally { btn.disabled = false; }
 }
 
+// ── Slack requests tracker: who was messaged, delivered or not, who answered ──
+let slackReqFilter = "open", slackReqCache = null;
+function ensureSlackRequestsView() {
+  if (document.getElementById("requests")) return;
+  const dash = document.querySelector('.nav-tab[data-view="dashboard"]');
+  if (dash) {
+    const tab = document.createElement("button");
+    tab.className = "nav-tab"; tab.type = "button"; tab.dataset.view = "requests";
+    tab.innerHTML = `📨 Slack requests <span id="slackReqBadge" class="chip-count hidden"></span>`;
+    dash.insertAdjacentElement("afterend", tab);
+    tab.addEventListener("click", () => showView("requests"));
+  }
+  const host = document.getElementById("dashboard")?.parentElement; if (!host) return;
+  const sec = document.createElement("section");
+  sec.id = "requests"; sec.className = "view";
+  sec.innerHTML = `
+    <div class="section-heading"><div><h2>Slack requests</h2>
+      <p>Every date request the bot sent: who got it, whether Slack delivered it, and who answered. Slack doesn't share read receipts, so "Waiting" means delivered but not answered yet.</p></div>
+      <button id="slackReqRefresh" class="secondary-btn" type="button">Refresh</button></div>
+    <section class="panel">
+      <div id="slackReqChips" class="chip-row status-chips"></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Employee</th><th>Request</th><th>Sent to</th><th>Stage</th><th>Status</th></tr></thead>
+        <tbody id="slackReqRows"><tr><td colspan="5" class="empty-state">Loading...</td></tr></tbody>
+      </table></div>
+    </section>`;
+  host.appendChild(sec);
+  sec.querySelector("#slackReqRefresh").addEventListener("click", () => loadSlackRequests(true));
+  sec.querySelector("#slackReqChips").addEventListener("click", ev => {
+    const c = ev.target.closest("[data-f]"); if (!c) return; slackReqFilter = c.dataset.f; renderSlackRequests();
+  });
+}
+
+async function loadSlackRequests(force) {
+  ensureSlackRequestsView();
+  if (slackReqCache && !force) { renderSlackRequests(); }
+  try {
+    const [{ data: reqs, error: e1 }, { data: mgrs }] = await Promise.all([
+      sb.from("schedule_requests")
+        .select("id,stage,status,level,expiry_date,booked_date,responded_by,sent_at,responded_at,level_at,note,dm_messages,dm_failed,certificates(type,employees(name,employee_id,department))")
+        .eq("market", MARKET).order("sent_at", { ascending: false }).limit(300),
+      sb.from("dept_managers").select("slack_user_id,manager_name").eq("market", MARKET),
+    ]);
+    if (e1) throw e1;
+    const names = {}; (mgrs || []).forEach(m => { names[m.slack_user_id] = (m.manager_name || m.slack_user_id).replace(/\s*\(.*\)$/, ""); });
+    slackReqCache = { reqs: reqs || [], names };
+  } catch (err) {
+    slackReqCache = slackReqCache || { reqs: [], names: {}, error: err.message };
+    slackReqCache.error = err.message;
+  }
+  renderSlackRequests();
+}
+
+function slackReqBucket(r) {
+  if (r.status === "sent") return "open";
+  if (r.status === "booked") return "booked";
+  return "hr"; // declined, escalated, no manager
+}
+function renderSlackRequests() {
+  const rowsEl = document.getElementById("slackReqRows"); if (!rowsEl || !slackReqCache) return;
+  const { reqs, names, error } = slackReqCache;
+  const counts = { open: 0, booked: 0, hr: 0, all: reqs.length };
+  reqs.forEach(r => counts[slackReqBucket(r)]++);
+  const badge = document.getElementById("slackReqBadge");
+  if (badge) { badge.textContent = counts.open; badge.classList.toggle("hidden", !counts.open); }
+  document.getElementById("slackReqChips").innerHTML = [["open","Waiting for reply"],["hr","With HR"],["booked","Booked"],["all","All"]]
+    .map(([f, l]) => `<button type="button" class="chip${f === slackReqFilter ? " active" : ""}${f === "hr" && counts.hr ? " chip-alert" : ""}" data-f="${f}">${l}<span class="chip-count">${counts[f]}</span></button>`).join("");
+  if (error && !reqs.length) { rowsEl.innerHTML = `<tr><td colspan="5" class="empty-state">Could not load requests: ${escHtml(error)}</td></tr>`; return; }
+  const list = reqs.filter(r => slackReqFilter === "all" || slackReqBucket(r) === slackReqFilter);
+  if (!list.length) { rowsEl.innerHTML = `<tr><td colspan="5" class="empty-state">Nothing here right now.</td></tr>`; return; }
+  const when = iso => iso ? `${fmtDate(String(iso).slice(0, 10))} ${String(iso).slice(11, 16)}` : "";
+  const who = id => escHtml(names[id] || id || "");
+  rowsEl.innerHTML = list.map(r => {
+    const c = r.certificates || {}; const e = c.employees || {};
+    const label = CERTIFICATES[c.type] ? CERTIFICATES[c.type].label : (c.type || "").toUpperCase();
+    const what = r.stage === "new" ? `🆕 New joiner ${label}` : `${label} renewal · expires ${fmtDate(r.expiry_date)}`;
+    const sent = (r.dm_messages || []).map(d => `<span class="dm ok" title="Delivered ${when(r.sent_at)}">✓ ${who(d.user)}</span>`)
+      .concat((r.dm_failed || []).map(d => `<span class="dm fail" title="${escHtml(d.error || "")}">✗ ${who(d.user)}</span>`)).join(" ");
+    const stage = r.status === "sent" ? (r.level === 2 ? "Backup" : "Leads") : r.status === "escalated" || r.status === "declined" ? "HR" : r.level === 2 ? "Backup" : "Leads";
+    let status;
+    if (r.status === "booked") status = r.booked_date ? `<span class="badge good">Booked ${fmtDate(r.booked_date)}</span> <small class="muted">by ${who(r.responded_by) || "portal"}</small>` : `<span class="badge good">Done</span> <small class="muted">${escHtml(r.note || "")}</small>`;
+    else if (r.status === "declined") status = `<span class="badge bad">Can't schedule → HR</span> <small class="muted">${who(r.responded_by)}</small>`;
+    else if (r.status === "escalated") status = `<span class="badge bad">With HR</span> <small class="muted">${escHtml(r.note === "no manager mapped" ? "no manager set" : "no reply in time")}</small>`;
+    else { const hrs = Math.floor((Date.now() - new Date(r.level_at || r.sent_at)) / 36e5); status = `<span class="badge watch">Waiting</span> <small class="muted">${hrs < 1 ? "just sent" : hrs + "h, moves on at 48h"}</small>`; }
+    return `<tr><td><strong>${escHtml(e.name || "")}</strong><br><small class="muted">${escHtml(e.employee_id || "")} · ${escHtml(e.department || "")}</small></td>
+      <td>${what}<br><small class="muted">Sent ${when(r.sent_at)}</small></td><td class="dm-cell">${sent || '<span class="muted">--</span>'}</td>
+      <td>${stage}</td><td>${status}</td></tr>`;
+  }).join("");
+}
+
+// ── Departments: one list for every dropdown, admins can add from the dropdown ─
+const ADD_DEPT = "__add_department__";
+function departmentList() {
+  if (state.departments && state.departments.length) {
+    // keep any department already used by an employee (e.g. from a CSV) so editing them never loses it
+    const extra = [...new Set((state.employees || []).map(e => e.department).filter(Boolean))]
+      .filter(d => !state.departments.some(x => x.toLowerCase() === d.toLowerCase())).sort();
+    return [...state.departments, ...extra];
+  }
+  const sel = document.querySelector('[id^="employeeForm"] select[name="department"]');
+  const fromPage = sel ? [...sel.options].map(o => o.value).filter(v => v && v !== ADD_DEPT) : [];
+  return fromPage.length ? fromPage : ["Kitchen", "Dispatch", "Warehouse", "Cafe"];
+}
+function fillDepartmentSelect(sel) {
+  const cur = sel.value;
+  const list = departmentList();
+  sel.innerHTML = `<option value="">Select</option>` + list.map(d => `<option value="${escHtml(d)}">${escHtml(d)}</option>`).join("")
+    + (isEditor && state.departments ? `<option value="${ADD_DEPT}">+ Add department…</option>` : "");
+  if (cur && list.includes(cur)) sel.value = cur;
+  if (!sel.dataset.deptWired) {
+    sel.dataset.deptWired = "1";
+    sel.addEventListener("change", () => { if (sel.value === ADD_DEPT) addDepartmentFrom(sel); });
+  }
+}
+function renderDepartmentOptions() {
+  document.querySelectorAll('select[name="department"]').forEach(fillDepartmentSelect);
+}
+async function addDepartmentFrom(sel) {
+  sel.value = "";
+  const raw = prompt("New department name (e.g. Logistics):");
+  const name = (raw || "").trim().replace(/\s+/g, " ");
+  if (!name) return;
+  const exists = departmentList().find(d => d.toLowerCase() === name.toLowerCase());
+  if (exists) { renderDepartmentOptions(); sel.value = exists; showToast(`${exists} already exists.`); return; }
+  setSyncState("syncing");
+  const { error } = await sb.from("departments").insert({ market: MARKET, name, sort: 100 });
+  if (error) { setSyncState("error"); showToast(`Could not add department: ${error.message}`); return; }
+  state.departments = [...departmentList(), name];
+  setSyncState("idle");
+  renderDepartmentOptions(); sel.value = name;
+  showToast(`${name} added. Set its managers for Slack requests (see the dept_managers list).`);
+}
+
 function renderAll() {
   ensureNewEmployeeButton();
+  renderDepartmentOptions();
+  ensureSlackRequestsView(); if (!slackReqCache) loadSlackRequests();
   renderDeptFilterOptions(); renderDashboard();
   CERT_TYPES.forEach(renderSectionRows);
 }
