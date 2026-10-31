@@ -34,14 +34,17 @@ module.exports = async (req, res) => {
 
 async function handle(p, action) {
   try {
-    const [r] = await db(`schedule_requests?id=eq.${encodeURIComponent(action.value)}&select=id,status,market,expiry_date,certificate_id,certificates(type,employees(name,employee_id,department))`);
+    const [r] = await db(`schedule_requests?id=eq.${encodeURIComponent(action.value)}&select=id,status,stage,market,expiry_date,certificate_id,certificates(type,employees(name,employee_id,department))`);
     if (!r) { await reply(p.response_url, done("This request no longer exists.")); return; }
     const e = r.certificates?.employees || {}; const type = r.certificates?.type || "";
     const label = CERT_LABELS[type] || type.toUpperCase();
     if (r.status !== "sent") { await reply(p.response_url, done(`Already handled (${r.status}): *${e.name}* · ${label}.`)); return; }
     const nowIso = new Date().toISOString();
     const picker = p.user?.name || p.user?.username || "a manager"; // shown as plain text so the manager isn't pinged
-    const sameCycle = `schedule_requests?certificate_id=eq.${r.certificate_id}&expiry_date=eq.${r.expiry_date}&status=eq.sent`;
+    const isNew = r.stage === "new"; // new joiner OHC appointment (no expiry yet)
+    const sameCycle = isNew
+      ? `schedule_requests?id=eq.${r.id}&status=eq.sent`
+      : `schedule_requests?certificate_id=eq.${r.certificate_id}&expiry_date=eq.${r.expiry_date}&status=eq.sent`;
 
     if (action.action_id === "book_submit") {
       const date = p.state?.values?.book?.book_date?.selected_option?.value;
@@ -54,15 +57,21 @@ async function handle(p, action) {
         body: { status: "booked", booked_date: date, responded_by: p.user?.id, responded_at: nowIso } });
       if (!claimed.length) { await reply(p.response_url, done(`Already handled by someone else: *${e.name}* · ${label}.`)); return; }
       await db(`certificates?id=eq.${r.certificate_id}`, { method: "PATCH", body: {
-        scheduled_date: date, schedule_note: `Booked via Slack by ${p.user?.name || p.user?.username || p.user?.id}`, updated_at: nowIso } });
-      await postToThread(r.market, `✅ *Please book:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · *${fmtDay(date)} ${date.slice(0, 4)}* · expires ${fmt(r.expiry_date)} · scheduled by ${picker}`, type);
-      await reply(p.response_url, done(`✅ *Booked:* *${e.name}* · ${label} on *${fmtDay(date)}*.\nHR has it, and the portal now shows Scheduled.`));
+        scheduled_date: date, schedule_note: `${isNew ? "OHC appointment set" : "Booked"} via Slack by ${p.user?.name || p.user?.username || p.user?.id}`, updated_at: nowIso } });
+      await postToThread(r.market, isNew
+        ? `🆕 *New joiner OHC: please prepare the application form and book* · *${e.name}* (${e.employee_id}, ${e.department}) · appointment *${fmtDay(date)} ${date.slice(0, 4)}* · scheduled by ${picker}`
+        : `✅ *Please book:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · *${fmtDay(date)} ${date.slice(0, 4)}* · expires ${fmt(r.expiry_date)} · scheduled by ${picker}`, type);
+      await reply(p.response_url, done(isNew
+        ? `✅ *OHC appointment set:* *${e.name}* on *${fmtDay(date)}*.\nHR will prepare the application form.`
+        : `✅ *Booked:* *${e.name}* · ${label} on *${fmtDay(date)}*.\nHR has it, and the portal now shows Scheduled.`));
       await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `✅ Scheduled by ${picker}: *${e.name}* · ${label} on *${fmtDay(date)}*. Nothing to do.`);
     } else if (action.action_id === "book_decline") {
       const claimed = await db(sameCycle, { method: "PATCH", prefer: "return=representation",
         body: { status: "declined", responded_by: p.user?.id, responded_at: nowIso } });
       if (!claimed.length) { await reply(p.response_url, done(`Already handled by someone else: *${e.name}* · ${label}.`)); return; }
-      await postToThread(r.market, `❗ *Manager can't schedule:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · expires ${fmt(r.expiry_date)} · ${picker} can't schedule this one.`, type);
+      await postToThread(r.market, isNew
+        ? `❗ *New joiner OHC, manager can't schedule:* *${e.name}* (${e.employee_id}, ${e.department}) · ${picker} can't arrange this one. Please book directly.`
+        : `❗ *Manager can't schedule:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · expires ${fmt(r.expiry_date)} · ${picker} can't schedule this one.`, type);
       await reply(p.response_url, done(`Sent to HR: *${e.name}* · ${label}. They'll take it from here.`));
       await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `Sent to HR by ${picker}: *${e.name}* · ${label}. Nothing to do.`);
     }
