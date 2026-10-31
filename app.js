@@ -256,6 +256,18 @@ async function confirmEid(empId, auto) {
       if (emp._certPresence) emp._certPresence.add(t);
     }
   }
+  if (auto) return "";
+  // Ask the supervisors on Slack to pick an OHC appointment date (next 14 days)
+  try {
+    const { data } = await sb.auth.getSession();
+    const token = data && data.session && data.session.access_token;
+    const r = await fetch("/api/ohc-request", { method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ employeeId: emp.id }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) return ` Slack request failed (${j.error || r.status}); it will retry at 9am.`;
+    return j.status && j.status.startsWith("sent") ? " Supervisors asked on Slack to book the OHC." : (j.status ? ` Slack: ${j.status}.` : "");
+  } catch (e) { return " Slack request failed; it will retry at 9am."; }
 }
 
 async function upsertCertificate(empStateId, type, cert, existingCertId) {
@@ -1358,14 +1370,15 @@ async function saveNewEmployee(form) {
       if (!live._certIds) live._certIds = {}; live._certIds[t] = certId;
       if (!live._certPresence) live._certPresence = new Set(); live._certPresence.add(t);
     }
-    if (form.elements.eid.checked && canConfirmEid() && types.some(isGated)) await confirmEid((state.employees.find(x => x.employeeId === code) || emp).id, false);
+    let slackNote = "";
+    if (form.elements.eid.checked && canConfirmEid() && types.some(isGated)) slackNote = await confirmEid((state.employees.find(x => x.employeeId === code) || emp).id, false) || "";
     setSyncState("idle");
     document.getElementById("newEmpModal").classList.add("hidden");
     renderAll();
     const live = state.employees.find(x => x.employeeId === code) || emp;
     const waiting = types.some(isGated) && !live.eidConfirmed;
     const labels = types.map(t => CERTIFICATES[t].label).join(", ");
-    showToast(`${name} added to ${labels}.${waiting ? " OHC waits for Emirates ID." : ""}`);
+    showToast(`${name} added to ${labels}.${waiting ? " OHC waits for Emirates ID." : ""}${slackNote}`);
   } catch (e) {
     setSyncState("error"); err.textContent = `Could not save: ${e.message}`;
   } finally { btn.disabled = false; }
@@ -1541,9 +1554,9 @@ function renderEidPanel(type, sfx) {
     panel.addEventListener("click", async ev => {
       const btn = ev.target.closest("[data-confirm-eid]"); if (!btn) return;
       const emp = state.employees.find(x => x.id === btn.dataset.confirmEid);
-      if (!emp || !confirm(`${emp.name} has their Emirates ID?\n\nThey'll move into the OHC list as Missing.`)) return;
+      if (!emp || !confirm(`${emp.name} has their Emirates ID?\n\nThey'll move into the OHC list, and their supervisors get a Slack message to pick an OHC appointment date.`)) return;
       btn.disabled = true; setSyncState("syncing");
-      try { await confirmEid(emp.id, false); setSyncState("idle"); renderAll(); showToast(`${emp.name} moved to OHC.`); }
+      try { const note = await confirmEid(emp.id, false); setSyncState("idle"); renderAll(); showToast(`${emp.name} moved to OHC.${note || ""}`); }
       catch (err) { setSyncState("error"); btn.disabled = false; showToast(`Could not confirm: ${err.message}`); }
     });
   }
