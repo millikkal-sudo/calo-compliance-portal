@@ -784,3 +784,33 @@ tr.bulk-selected-row > td { background:var(--fill-brand-light); }
 
 /* PIC (Person In Charge): categorical accent, green tint so it reads apart from the others */
 .pic-badge { background:var(--fill-brand-light); color:var(--brand-90); border:1px solid var(--brand-40); }
+
+/* Waiting for Emirates ID (OHC gate) */
+.eid-panel { border-color:var(--warning-2); }
+.eid-panel .panel-heading { background:var(--fill-warning-weak); flex-wrap:wrap; gap:6px 12px; }
+.eid-panel .panel-heading .muted { font-size:13px; }
+.eid-btn { padding:5px 14px; font-size:13px; }
+.eid-note { margin-left:auto; background:var(--fill-warning-weak); color:var(--content-text-warning); border-radius:var(--radius-full); padding:2px 10px; font:700 12px/18px var(--font); cursor:pointer; }
+.eid-note:hover { outline:1px solid var(--warning-2); }
+
+/* New employee modal: pick the certificates once */
+.new-emp-box { max-width:640px; max-height:90vh; overflow:auto; }
+.ne-grid { display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:12px; }
+@media (max-width:640px) { .ne-grid { grid-template-columns:1fr; } }
+.ne-head { font:700 14px/20px var(--font); color:var(--content-contrast); margin-top:6px; display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; }
+.ne-head .muted { font:400 12px/16px var(--font); }
+.ne-certs { display:flex; flex-direction:column; gap:8px; }
+.ne-cert { border:1px solid var(--border-default); border-radius:var(--radius-md); padding:10px 14px; }
+.ne-cert:has(.ne-pick input:checked) { border-color:var(--border-brand); background:var(--fill-brand-light); }
+.ne-cert.is-on { background:var(--bg-elevated); opacity:.75; }
+.ne-pick { display:flex !important; flex-direction:row !important; align-items:center; gap:8px; font:700 13px/20px var(--font) !important; cursor:pointer; flex-wrap:wrap; }
+.ne-pick input { width:16px; height:16px; accent-color:var(--fill-brand-regular); }
+.ne-name { color:var(--content-secondary); font-weight:400; }
+.ne-on { margin-left:auto; font-size:12px; color:var(--content-secondary); }
+.ne-dates { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin-top:10px; }
+.ne-dates small { font-weight:400; }
+.ne-existing { background:var(--fill-warning-weak); color:var(--content-primary); border-radius:var(--radius-sm); padding:8px 12px; font-size:13px; }
+.ne-eid { display:flex !important; flex-direction:row !important; align-items:center; gap:8px; font-weight:700; }
+.ne-eid input { width:16px; height:16px; accent-color:var(--fill-brand-regular); }
+.ne-error { color:var(--content-text-error); font-size:13px; min-height:18px; }
+#newEmployeeTop { margin-right:8px; }
