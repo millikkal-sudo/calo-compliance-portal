@@ -98,34 +98,32 @@ function buildPdf(market, emps, sums) {
   });
   y += Math.ceil(tiles.length / tc) * (tH + gap) + 18;
 
-  const ROW_H = 18, HEAD_H = 20, FOOT = 60;
   if (unhandled.length) {
     doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(185,28,28);
     doc.text(`Needs Immediate Action (${unhandled.length})`, margin, y);
-    const room = Math.max(0, Math.floor((pageH - FOOT - (y + 8) - HEAD_H - 16) / ROW_H));
-    const sorted = unhandled.sort((a, b) => a.days - b.days), shown = sorted.slice(0, room);
+    const sorted = unhandled.sort((a, b) => a.days - b.days);
+    // Everyone is listed; the table runs onto as many pages as it needs (header repeats on each page)
     autoTable(doc, {
-      startY: y + 8, margin: { left: margin, right: margin, bottom: FOOT },
+      startY: y + 8, margin: { left: margin, right: margin, top: 40, bottom: 50 },
       head: [["Name","ID","Department","Certificate","Status","Expiry Date","Days"]],
-      body: shown.map(s => [s.emp.name, s.emp.employee_id, s.emp.department, s.label, s.raw, fmt(s.expiry),
+      body: sorted.map(s => [s.emp.name, s.emp.employee_id, s.emp.department, s.label, s.raw, fmt(s.expiry),
         isFinite(s.days) ? (s.days < 0 ? `${Math.abs(s.days)}d overdue` : `${s.days}d left`) : "--"]),
-      styles: { fontSize: 8, cellPadding: 5, overflow: "ellipsize" },
+      styles: { fontSize: 8, cellPadding: 5, overflow: "linebreak" },
       headStyles: { fillColor: [185,28,28], textColor: 255, fontStyle: "bold" },
       columnStyles: { 4: { textColor: [185,28,28], fontStyle: "bold" }, 6: { textColor: [185,28,28] } },
+      showHead: "everyPage",
       theme: "grid",
     });
-    y = doc.lastAutoTable.finalY + 14;
-    if (sorted.length > shown.length) {
-      doc.setFontSize(9); doc.setFont("helvetica","normal"); doc.setTextColor(107,114,128);
-      doc.text(`+ ${sorted.length - shown.length} more in the portal.`, margin, y);
-    }
   } else {
     doc.setFontSize(11); doc.setFont("helvetica","bold"); doc.setTextColor(21,128,61);
     doc.text("All clear. Nothing expired or due in the next 30 days.", margin, y);
   }
-  while (doc.internal.getNumberOfPages() > 1) doc.deletePage(doc.internal.getNumberOfPages());
-  doc.setPage(1); doc.setFontSize(8); doc.setTextColor(156,163,175);
-  doc.text(`${cfg.label} Compliance Portal · Confidential`, pageW/2, pageH-20, { align: "center" });
+  // Footer with page numbers on every page
+  const pages = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pages; i++) {
+    doc.setPage(i); doc.setFontSize(8); doc.setTextColor(156,163,175);
+    doc.text(`${cfg.label} Compliance Portal · Confidential · Page ${i} of ${pages}`, pageW/2, pageH-20, { align: "center" });
+  }
   return { buffer: Buffer.from(doc.output("arraybuffer")), actionNeeded, unhandled: unhandled.length, scheduled: scheduled.length };
 }
 
