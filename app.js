@@ -88,12 +88,12 @@ function hasCertData(emp, type) {
   return Boolean(r.issueDate || r.expiryDate || r.file || r.scheduledDate);
 }
 function certApplies(emp, type) {
-  if (isGated(type) && !emp.eidConfirmed) return false; // new joiner: no OHC until Emirates ID is confirmed
+  if (isGated(type) && (emp.ohcNotNeeded || !emp.eidConfirmed)) return false; // marked "no need", or waiting for Emirates ID
   return empBelongsInSection(emp, type);
 }
 // New joiners in the same list (BFS) who are still waiting for their Emirates ID
 function eidPending(type) {
-  return state.employees.filter(e => !e.eidConfirmed && empBelongsInSection(e, type));
+  return state.employees.filter(e => !e.eidConfirmed && !e.ohcNotNeeded && empBelongsInSection(e, type));
 }
 const defaultSettings = { reminderDays: 30, managerEmail: "" };
 
@@ -208,6 +208,7 @@ async function loadFromSupabase() {
         certificates, _certIds,
         _certPresence: empCertPresence[emp.id] || new Set(),
         eidConfirmed: emp.eid_confirmed === undefined || emp.eid_confirmed === null ? true : Boolean(emp.eid_confirmed),
+        ohcNotNeeded: Boolean(emp.ohc_not_needed),
         eidConfirmedAt: emp.eid_confirmed_at || "",
       };
     });
@@ -1689,18 +1690,22 @@ function renderEidPanel(type, sfx) {
     panel.className = "panel eid-panel";
     register.parentElement.insertBefore(panel, register);
     panel.addEventListener("click", async ev => {
-      const rm = ev.target.closest("[data-remove-eid]");
-      if (rm) { // joiner left / added by mistake: remove from the portal completely
-        const emp = state.employees.find(x => x.id === rm.dataset.removeEid);
-        if (!emp || !isEditor) return;
-        if (!confirm(`Remove ${emp.name} (${emp.employeeId}) from the portal completely?\n\nUse this if they left or were added by mistake. Their BFS and any other records are deleted too.`)) return;
-        rm.disabled = true; setSyncState("syncing");
+      const nn = ev.target.closest("[data-no-need]");
+      if (nn) { // stays in BFS, never goes to OHC (Undo brings them back)
+        const emp = state.employees.find(x => x.id === nn.dataset.noNeed);
+        const undo = nn.dataset.undo === "1";
+        if (!emp || !canConfirmEid()) return;
+        if (!undo && !confirm(`${emp.name} doesn't need an OHC?\n\nThey stay in BFS but won't appear in OHC, its counts or Slack requests. You can undo this below the list.`)) return;
+        nn.disabled = true; setSyncState("syncing");
         try {
-          for (const t of Object.keys(emp.certificates || {})) { const f = emp.certificates[t] && emp.certificates[t].file; if (f && f.filePath) await deleteStorageFile(f.filePath); }
-          await deleteEmployeeFromDb(emp.id);
-          state.employees = state.employees.filter(x => x.id !== emp.id);
-          setSyncState("idle"); renderAll(); showToast(`${emp.name} removed.`);
-        } catch (err) { setSyncState("error"); rm.disabled = false; showToast(`Could not remove: ${err.message}`); }
+          const { error } = await sb.from("employees").update(undo
+            ? { ohc_not_needed: false, ohc_not_needed_at: null, ohc_not_needed_by: null }
+            : { ohc_not_needed: true, ohc_not_needed_at: new Date().toISOString(), ohc_not_needed_by: (session && session.email) || "" }).eq("id", emp.id);
+          if (error) throw error;
+          emp.ohcNotNeeded = !undo;
+          setSyncState("idle"); renderAll();
+          showToast(undo ? `${emp.name} is back on the Emirates ID waiting list.` : `${emp.name}: no OHC needed. Still in BFS.`);
+        } catch (err) { setSyncState("error"); nn.disabled = false; showToast(`Could not update: ${err.message}`); }
         return;
       }
       const btn = ev.target.closest("[data-confirm-eid]"); if (!btn) return;
@@ -1711,17 +1716,22 @@ function renderEidPanel(type, sfx) {
       catch (err) { setSyncState("error"); btn.disabled = false; showToast(`Could not confirm: ${err.message}`); }
     });
   }
-  panel.classList.toggle("hidden", list.length === 0);
+  const noNeed = state.employees.filter(e => e.ohcNotNeeded && empBelongsInSection(e, type)).sort((a, b) => a.name.localeCompare(b.name));
+  panel.classList.toggle("hidden", list.length === 0 && noNeed.length === 0);
   const can = canConfirmEid();
   panel.innerHTML = `
     <div class="panel-heading"><h3>Waiting for Emirates ID <span class="chip-count">${list.length}</span></h3>
       <span class="muted">New joiners join OHC once ${can ? "you confirm" : "HSE confirms"} their Emirates ID.</span></div>
-    <div class="table-wrap"><table><thead><tr><th>Name</th><th>ID</th><th>Dept</th><th>Added</th><th></th></tr></thead><tbody>
+    ${list.length ? "" : `<p class="eid-empty muted">Nobody waiting right now.</p>`}
+    <div class="table-wrap${list.length ? "" : " hidden"}"><table><thead><tr><th>Name</th><th>ID</th><th>Dept</th><th>Added</th><th></th></tr></thead><tbody>
     ${list.map(e => `<tr><td><strong>${escHtml(e.name)}</strong></td><td>${escHtml(e.employeeId)}</td><td>${escHtml(e.department)}</td>
       <td class="date-cell">${e.createdAt ? fmtDate(String(e.createdAt).slice(0, 10)) : "--"}</td>
       <td class="eid-actions">${can ? `<button class="secondary-btn eid-btn" type="button" data-confirm-eid="${e.id}">✓ Emirates ID received</button>` : `<span class="badge neutral">Waiting</span>`}
-        ${isEditor ? `<button class="text-btn danger" type="button" data-remove-eid="${e.id}">Remove</button>` : ""}</td></tr>`).join("")}
-    </tbody></table></div>`;
+        ${can ? `<button class="text-btn" type="button" data-no-need="${e.id}">No need</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${noNeed.length ? `<details class="eid-noneed"><summary>Marked no need <span class="chip-count">${noNeed.length}</span></summary>
+      <div class="eid-noneed-list">${noNeed.map(e => `<span class="eid-noneed-item"><strong>${escHtml(e.name)}</strong> <small class="muted">${escHtml(e.employeeId)} · ${escHtml(e.department)}</small>
+        ${can ? `<button class="text-btn" type="button" data-no-need="${e.id}" data-undo="1">Undo</button>` : ""}</span>`).join("")}</div></details>` : ""}`;
 }
 
 function renderSectionRows(type) {
