@@ -11,7 +11,7 @@ const CERT_LABELS = {
 const today = () => new Date(Date.now() + 4 * 3600e3).toISOString().slice(0, 10);
 const addDays = (iso, n) => { const d = new Date(iso + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
 const daysBetween = (a, b) => Math.round((new Date(b + "T00:00:00Z") - new Date(a + "T00:00:00Z")) / 864e5);
-const fmt = iso => { const d = new Date(iso + "T00:00:00Z"); return `${String(d.getUTCDate()).padStart(2, "0")} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
+const fmt = iso => { if (!iso) return "--"; const d = new Date(iso + "T00:00:00Z"); return `${String(d.getUTCDate()).padStart(2, "0")} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`; };
 const fmtDay = iso => { const d = new Date(iso + "T00:00:00Z"); return `${DOW[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
 
 async function db(path, { method = "GET", body, prefer } = {}) {
@@ -78,4 +78,60 @@ async function closeDms(dmLists, skipTs, text) {
   }
 }
 
-module.exports = { db, slack, postToThread, closeDms, today, addDays, daysBetween, fmt, fmtDay, CERT_LABELS };
+// Department managers by tier: { 1: [slack ids], 2: [slack ids] }
+async function managersFor(market, department) {
+  const rows = await db(`dept_managers?market=eq.${encodeURIComponent(market)}&select=department,slack_user_id,tier`);
+  const t = { 1: [], 2: [] };
+  for (const r of rows) if ((r.department || "").trim().toLowerCase() === (department || "").trim().toLowerCase()) t[r.tier === 2 ? 2 : 1].push(r.slack_user_id);
+  return t;
+}
+async function dmUsers(users, text, blocks) {
+  const dms = [], errors = [];
+  for (const user of users) {
+    try { const m = await slack("chat.postMessage", { channel: user, text, blocks }); dms.push({ user, channel: m.channel, ts: m.ts }); }
+    catch (e) { errors.push(`${user}: ${e.message}`); }
+  }
+  return { dms, errors };
+}
+
+// New joiner OHC: Emirates ID confirmed, supervisors pick an appointment date in the next 14 days
+function newOhcBlocks({ id, emp, handover, now }) {
+  const options = Array.from({ length: 14 }, (_, i) => {
+    const d = addDays(now, i + 1);
+    return { text: { type: "plain_text", text: fmtDay(d) }, value: d };
+  });
+  const lead = handover ? "⏰ *Passed to you* · no reply from the first managers in 48 hours\n" : "";
+  return [
+    { type: "section", text: { type: "mrkdwn", text:
+      `${lead}🆕 *New joiner needs an OHC* · Emirates ID received\n*${emp.name}* (${emp.employee_id}, ${emp.department})\nPick a date in the next two weeks for the OHC appointment. HR will prepare the application form.` } },
+    { type: "actions", block_id: "book", elements: [
+      { type: "static_select", action_id: "book_date", placeholder: { type: "plain_text", text: "Choose a date" }, options },
+      { type: "button", action_id: "book_submit", style: "primary", text: { type: "plain_text", text: "Submit" }, value: id },
+      { type: "button", action_id: "book_decline", text: { type: "plain_text", text: "Can't, needs HR" }, value: id },
+    ] },
+    { type: "context", elements: [{ type: "mrkdwn", text: "Calo Compliance Portal · your pick marks the OHC as Scheduled in the portal" }] },
+  ];
+}
+
+// Start the new-joiner OHC request (once per OHC record). Returns a short status string.
+async function startNewOhcRequest({ market, emp, certId }) {
+  const existing = await db(`schedule_requests?certificate_id=eq.${certId}&stage=eq.new&select=id`);
+  if (existing.length) return "already requested";
+  const tiers = await managersFor(market, emp.department);
+  const first = tiers[1].length ? tiers[1] : tiers[2];
+  const level = tiers[1].length ? 1 : 2;
+  if (!first.length) {
+    await db("schedule_requests", { method: "POST", body: { certificate_id: certId, market, stage: "new", expiry_date: null, status: "escalated", note: "no manager mapped" } });
+    await postToThread(market, `⚠️ *No manager set for ${emp.department}*. New joiner needs an OHC, please book directly: *${emp.name}* (${emp.employee_id})`, "ohc");
+    return "no manager set, sent to HR";
+  }
+  const [row] = await db("schedule_requests", { method: "POST", prefer: "return=representation",
+    body: { certificate_id: certId, market, stage: "new", expiry_date: null, status: "sent", level } });
+  const blocks = newOhcBlocks({ id: row.id, emp, handover: false, now: today() });
+  const { dms, errors } = await dmUsers(first, `New joiner needs an OHC: ${emp.name} (${emp.employee_id})`, blocks);
+  if (!dms.length) throw new Error("no manager could be messaged: " + errors.join("; "));
+  await db(`schedule_requests?id=eq.${row.id}`, { method: "PATCH", body: { dm_messages: dms, slack_channel: dms[0].channel, slack_ts: dms[0].ts } });
+  return `sent to ${dms.length} manager${dms.length === 1 ? "" : "s"}`;
+}
+
+module.exports = { managersFor, dmUsers, newOhcBlocks, startNewOhcRequest, db, slack, postToThread, closeDms, today, addDays, daysBetween, fmt, fmtDay, CERT_LABELS };
