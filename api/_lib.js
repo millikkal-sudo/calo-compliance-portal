@@ -79,17 +79,24 @@ async function closeDms(dmLists, skipTs, text) {
 }
 
 // Department managers by tier: { 1: [slack ids], 2: [slack ids] }
-async function managersFor(market, department) {
+// department "*" = gets every request (all departments); "*ohc-new" = only new joiner OHC requests
+async function managersFor(market, department, isNew) {
   const rows = await db(`dept_managers?market=eq.${encodeURIComponent(market)}&select=department,slack_user_id,tier`);
   const t = { 1: [], 2: [] };
-  for (const r of rows) if ((r.department || "").trim().toLowerCase() === (department || "").trim().toLowerCase()) t[r.tier === 2 ? 2 : 1].push(r.slack_user_id);
+  const want = (department || "").trim().toLowerCase();
+  for (const r of rows) {
+    const d = (r.department || "").trim().toLowerCase();
+    if (d !== want && d !== "*" && !(isNew && d === "*ohc-new")) continue;
+    const list = t[r.tier === 2 ? 2 : 1];
+    if (!list.includes(r.slack_user_id)) list.push(r.slack_user_id);
+  }
   return t;
 }
 async function dmUsers(users, text, blocks) {
   const dms = [], errors = [];
   for (const user of users) {
     try { const m = await slack("chat.postMessage", { channel: user, text, blocks }); dms.push({ user, channel: m.channel, ts: m.ts }); }
-    catch (e) { errors.push(`${user}: ${e.message}`); }
+    catch (e) { errors.push({ user, error: e.message, at: new Date().toISOString() }); }
   }
   return { dms, errors };
 }
@@ -117,7 +124,7 @@ function newOhcBlocks({ id, emp, handover, now }) {
 async function startNewOhcRequest({ market, emp, certId }) {
   const existing = await db(`schedule_requests?certificate_id=eq.${certId}&stage=eq.new&select=id`);
   if (existing.length) return "already requested";
-  const tiers = await managersFor(market, emp.department);
+  const tiers = await managersFor(market, emp.department, true);
   const first = tiers[1].length ? tiers[1] : tiers[2];
   const level = tiers[1].length ? 1 : 2;
   if (!first.length) {
@@ -129,8 +136,8 @@ async function startNewOhcRequest({ market, emp, certId }) {
     body: { certificate_id: certId, market, stage: "new", expiry_date: null, status: "sent", level } });
   const blocks = newOhcBlocks({ id: row.id, emp, handover: false, now: today() });
   const { dms, errors } = await dmUsers(first, `New joiner needs an OHC: ${emp.name} (${emp.employee_id})`, blocks);
-  if (!dms.length) throw new Error("no manager could be messaged: " + errors.join("; "));
-  await db(`schedule_requests?id=eq.${row.id}`, { method: "PATCH", body: { dm_messages: dms, slack_channel: dms[0].channel, slack_ts: dms[0].ts } });
+  await db(`schedule_requests?id=eq.${row.id}`, { method: "PATCH", body: { dm_messages: dms, dm_failed: errors, slack_channel: dms[0] && dms[0].channel, slack_ts: dms[0] && dms[0].ts } });
+  if (!dms.length) throw new Error("no manager could be messaged: " + errors.map(e => `${e.user}: ${e.error}`).join("; "));
   return `sent to ${dms.length} manager${dms.length === 1 ? "" : "s"}`;
 }
 
