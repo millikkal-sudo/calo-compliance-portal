@@ -18,6 +18,7 @@ const MARKET_CONFIG = {
     },
     sectionSuffix:  { bfs: "Bfs", ohc: "Ohc", fsc: "Fsc", fac: "Fac", pic: "Pic" },
     certGroups:     [["bfs","ohc"], ["fsc"], ["fac"], ["pic"]], // PIC: only the people you add
+    gates:          { ohc: "eid" },  // OHC only after the Emirates ID is confirmed
     navLabel:       "UAE Kitchen",
   },
   Qatar: {
@@ -50,6 +51,10 @@ function empBelongsInSection(emp, type) {
 
 let MARKET = null, CERTIFICATES = {}, CERT_TYPES = [], SECTION_SUFFIX = {}, LINKED_TYPES = [], UNIVERSAL_TYPES = [];
 const EDITOR_EMAILS = [];
+// Only these people can confirm a new joiner's Emirates ID (moves them into OHC)
+const EID_CONFIRMERS = ["m.illikkal@calo.app"];
+const canConfirmEid = () => Boolean(session && EID_CONFIRMERS.includes((session.email || "").toLowerCase()));
+const isGated = (type) => Boolean(MARKET_CONFIG[MARKET] && MARKET_CONFIG[MARKET].gates && MARKET_CONFIG[MARKET].gates[type]);
 const OPS_EMAILS    = [];
 
 function applyMarket(market) {
@@ -83,7 +88,12 @@ function hasCertData(emp, type) {
   return Boolean(r.issueDate || r.expiryDate || r.file || r.scheduledDate);
 }
 function certApplies(emp, type) {
+  if (isGated(type) && !emp.eidConfirmed) return false; // new joiner: no OHC until Emirates ID is confirmed
   return empBelongsInSection(emp, type);
+}
+// New joiners in the same list (BFS) who are still waiting for their Emirates ID
+function eidPending(type) {
+  return state.employees.filter(e => !e.eidConfirmed && empBelongsInSection(e, type));
 }
 const defaultSettings = { reminderDays: 30, managerEmail: "" };
 
@@ -192,6 +202,8 @@ async function loadFromSupabase() {
         department: emp.department, createdAt: emp.created_at, updatedAt: emp.updated_at,
         certificates, _certIds,
         _certPresence: empCertPresence[emp.id] || new Set(),
+        eidConfirmed: emp.eid_confirmed === undefined || emp.eid_confirmed === null ? true : Boolean(emp.eid_confirmed),
+        eidConfirmedAt: emp.eid_confirmed_at || "",
       };
     });
     state.settings = cfg ? { reminderDays: cfg.reminder_days, managerEmail: cfg.manager_email||"" } : { ...defaultSettings };
@@ -226,6 +238,26 @@ async function upsertEmployee(emp) {
 // Returns the cert row id so callers can update _certIds
 // empStateId = the id stored in state (may be a local UUID not yet in DB)
 // We resolve the real DB employee id via employee_id code before inserting
+// Confirm a new joiner's Emirates ID and move them into the OHC list
+async function confirmEid(empId, auto) {
+  const emp = state.employees.find(x => x.id === empId);
+  if (!emp || emp.eidConfirmed) return;
+  if (!auto && !canConfirmEid()) { showToast("Only HSE can confirm Emirates ID."); return; }
+  const by = auto ? "auto: has OHC" : (session && session.email) || "";
+  const { error } = await sb.from("employees").update({ eid_confirmed: true, eid_confirmed_at: new Date().toISOString(), eid_confirmed_by: by }).eq("id", emp.id);
+  if (error) throw error;
+  emp.eidConfirmed = true; emp.eidConfirmedAt = new Date().toISOString();
+  // Make sure they have an OHC row so they show in the OHC register as Missing
+  const gated = Object.keys((MARKET_CONFIG[MARKET] && MARKET_CONFIG[MARKET].gates) || {});
+  for (const t of gated) {
+    if (!(emp._certPresence && emp._certPresence.has(t)) && !hasCertData(emp, t)) {
+      const id = await upsertCertificate(emp.id, t, {}, emp._certIds && emp._certIds[t]);
+      if (!emp._certIds) emp._certIds = {}; emp._certIds[t] = id;
+      if (emp._certPresence) emp._certPresence.add(t);
+    }
+  }
+}
+
 async function upsertCertificate(empStateId, type, cert, existingCertId) {
   // Look up the real DB row id using the unique employee_id code
   const emp = state.employees.find(x => x.id === empStateId);
@@ -262,6 +294,8 @@ async function upsertCertificate(empStateId, type, cert, existingCertId) {
     .upsert(payload, { onConflict: "employee_id,type" })
     .select("id").single();
   if (error) throw error;
+  // An OHC date or file proves the Emirates ID exists
+  if (isGated(type) && (cert.issueDate || cert.file) && !emp.eidConfirmed) { try { await confirmEid(emp.id, true); renderAll(); } catch (e) { console.warn("eid auto-confirm", e); } }
   return data.id;
 }
 
@@ -1184,7 +1218,161 @@ function render() {
   badgeEl.textContent = "👁 View only";
   renderAll();
 }
+// ── New employee: enter the person once, tick the certificates they need ─────
+function neDepartments() {
+  const sel = document.querySelector('[id^="employeeForm"] select[name="department"]');
+  const opts = sel ? [...sel.options].map(o => o.value).filter(v => v && v.toLowerCase() !== "select") : [];
+  return opts.length ? opts : ["Kitchen", "Dispatch", "Warehouse", "Cafe"];
+}
+function neGroups() { return (MARKET_CONFIG[MARKET] && MARKET_CONFIG[MARKET].certGroups) || CERT_TYPES.map(t => [t]); }
+
+function ensureNewEmployeeButton() {
+  let btn = document.getElementById("newEmployeeTop");
+  if (!btn) {
+    const anchor = document.getElementById("exportPdfTop");
+    if (!anchor) return;
+    btn = document.createElement("button");
+    btn.id = "newEmployeeTop"; btn.type = "button"; btn.className = "secondary-btn"; btn.textContent = "+ New employee";
+    anchor.parentElement.insertBefore(btn, anchor);
+    btn.addEventListener("click", openNewEmployee);
+  }
+  btn.classList.toggle("hidden", !isEditor);
+}
+
+function openNewEmployee() {
+  if (!isEditor) return;
+  let modal = document.getElementById("newEmpModal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "newEmpModal"; modal.className = "modal-overlay hidden";
+    modal.innerHTML = `
+      <div class="modal-box new-emp-box" role="dialog" aria-modal="true" aria-labelledby="neTitle">
+        <div class="modal-header"><h3 id="neTitle">New employee</h3><button class="modal-close" type="button" data-ne-close aria-label="Close">×</button></div>
+        <form id="newEmpForm" class="modal-form" autocomplete="off">
+          <div class="ne-grid">
+            <label>Employee ID<input name="employeeId" required placeholder="FTE0123" /></label>
+            <label>Name<input name="name" required placeholder="Full name" /></label>
+            <label>Department<select name="department" required></select></label>
+          </div>
+          <p id="neExisting" class="ne-existing hidden"></p>
+          <div class="ne-head">Certificates needed <span class="muted">Dates are optional; leave blank if they still need the training.</span></div>
+          <div id="neCerts" class="ne-certs"></div>
+          <label id="neEidWrap" class="ne-eid hidden"><input type="checkbox" name="eid" /> Emirates ID already received, so start OHC now</label>
+          <p id="neError" class="ne-error"></p>
+          <div class="modal-actions"><button type="submit" class="primary-btn" id="neSubmit">Add employee</button><button type="button" class="ghost-btn" data-ne-close>Cancel</button></div>
+        </form>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener("click", ev => { if (ev.target === modal || ev.target.closest("[data-ne-close]")) modal.classList.add("hidden"); });
+    const form = modal.querySelector("#newEmpForm");
+    form.addEventListener("change", ev => {
+      const pick = ev.target.closest(".ne-pick input");
+      if (pick) pick.closest(".ne-cert").querySelector(".ne-dates").classList.toggle("hidden", !pick.checked);
+      neSyncEid(form);
+    });
+    form.elements.employeeId.addEventListener("input", () => neCheckExisting(form));
+    form.addEventListener("submit", ev => { ev.preventDefault(); saveNewEmployee(form); });
+  }
+  const form = modal.querySelector("#newEmpForm");
+  form.reset();
+  form.elements.department.innerHTML = `<option value="">Select</option>` + neDepartments().map(d => `<option>${escHtml(d)}</option>`).join("");
+  modal.querySelector("#neCerts").innerHTML = neGroups().map(group => {
+    const badges = group.map(t => `<span class="cert-type-badge ${t}-badge">${escHtml(CERTIFICATES[t].label)}</span>`).join(" + ");
+    const names = group.map(t => CERTIFICATES[t].fullName).join(" + ");
+    const dates = group.map(t => `<label>${escHtml(CERTIFICATES[t].label)} issue date${isGated(t) ? " <small>(after Emirates ID)</small>" : ""}
+        <input type="date" name="date_${t}" /><small class="muted">Valid ${CERTIFICATES[t].validYears} year${CERTIFICATES[t].validYears === 1 ? "" : "s"}</small></label>`).join("");
+    return `<div class="ne-cert" data-group="${group.join(",")}">
+      <label class="ne-pick"><input type="checkbox" value="${group.join(",")}" /> ${badges} <span class="ne-name">${escHtml(names)}</span><span class="ne-on hidden">Already on this list</span></label>
+      <div class="ne-dates hidden">${dates}</div></div>`;
+  }).join("");
+  modal.querySelector("#neExisting").classList.add("hidden");
+  modal.querySelector("#neError").textContent = "";
+  modal.querySelector("#neSubmit").textContent = "Add employee";
+  neSyncEid(form);
+  modal.classList.remove("hidden");
+  form.elements.employeeId.focus();
+}
+
+// Typing an ID that already exists switches to "add more certificates for this person"
+function neCheckExisting(form) {
+  const code = form.elements.employeeId.value.trim().toLowerCase();
+  const emp = code && state.employees.find(e => e.employeeId.toLowerCase() === code);
+  const note = document.getElementById("neExisting");
+  form.querySelectorAll(".ne-cert").forEach(box => {
+    const group = box.dataset.group.split(",");
+    const on = Boolean(emp) && group.some(t => empBelongsInSection(emp, t));
+    const cb = box.querySelector(".ne-pick input");
+    cb.disabled = on; if (on) cb.checked = false;
+    box.classList.toggle("is-on", on);
+    box.querySelector(".ne-on").classList.toggle("hidden", !on);
+    if (on) box.querySelector(".ne-dates").classList.add("hidden");
+  });
+  if (emp) {
+    if (!form.elements.name.value.trim()) form.elements.name.value = emp.name;
+    if (!form.elements.department.value) form.elements.department.value = emp.department;
+    note.innerHTML = `<strong>${escHtml(emp.name)}</strong> is already in the portal. Tick any extra certificates to add.`;
+    note.classList.remove("hidden");
+    document.getElementById("neSubmit").textContent = "Add certificates";
+  } else {
+    note.classList.add("hidden");
+    document.getElementById("neSubmit").textContent = "Add employee";
+  }
+  neSyncEid(form);
+}
+
+// The Emirates ID tick only shows when a gated cert (OHC) is picked and you are allowed to confirm
+function neSyncEid(form) {
+  const wrap = document.getElementById("neEidWrap"); if (!wrap) return;
+  const code = form.elements.employeeId.value.trim().toLowerCase();
+  const emp = code && state.employees.find(e => e.employeeId.toLowerCase() === code);
+  const gatedPicked = [...form.querySelectorAll(".ne-pick input:checked")].some(cb => cb.value.split(",").some(isGated));
+  wrap.classList.toggle("hidden", !(gatedPicked && canConfirmEid() && !(emp && emp.eidConfirmed)));
+}
+
+async function saveNewEmployee(form) {
+  const err = document.getElementById("neError"); err.textContent = "";
+  const name = form.elements.name.value.trim(), code = form.elements.employeeId.value.trim(), dept = form.elements.department.value;
+  const groups = [...form.querySelectorAll(".ne-pick input:checked:not(:disabled)")].map(cb => cb.value.split(","));
+  if (!code || !name || !dept) { err.textContent = "Fill in Employee ID, name and department."; return; }
+  if (!groups.length) { err.textContent = "Tick at least one certificate."; return; }
+
+  const existing = state.employees.find(e => e.employeeId.toLowerCase() === code.toLowerCase());
+  const id = existing ? existing.id : crypto.randomUUID();
+  const certData = existing ? JSON.parse(JSON.stringify(existing.certificates)) : createEmptyCertificates();
+  const types = [].concat(...groups);
+  for (const t of types) {
+    const issue = parseDate(form.elements[`date_${t}`] && form.elements[`date_${t}`].value);
+    certData[t] = issue ? { ...(certData[t] || {}), issueDate: issue, expiryDate: calcExpiry(issue, CERTIFICATES[t].validYears) } : (certData[t] || {});
+  }
+  const emp = existing || { id, createdAt: new Date().toISOString(), _certIds: {}, _certPresence: new Set(), eidConfirmed: false };
+  Object.assign(emp, { name, employeeId: code, department: dept, certificates: certData, updatedAt: new Date().toISOString() });
+  if (!emp._certPresence) emp._certPresence = new Set();
+  if (!existing) state.employees = [emp, ...state.employees];
+
+  const btn = document.getElementById("neSubmit"); btn.disabled = true; setSyncState("syncing");
+  try {
+    const dbId = await upsertEmployee(emp);
+    for (const t of types) {
+      const certId = await upsertCertificate(dbId, t, certData[t] || {}, emp._certIds && emp._certIds[t]);
+      const live = state.employees.find(x => x.employeeId === code) || emp;
+      if (!live._certIds) live._certIds = {}; live._certIds[t] = certId;
+      if (!live._certPresence) live._certPresence = new Set(); live._certPresence.add(t);
+    }
+    if (form.elements.eid.checked && canConfirmEid() && types.some(isGated)) await confirmEid((state.employees.find(x => x.employeeId === code) || emp).id, false);
+    setSyncState("idle");
+    document.getElementById("newEmpModal").classList.add("hidden");
+    renderAll();
+    const live = state.employees.find(x => x.employeeId === code) || emp;
+    const waiting = types.some(isGated) && !live.eidConfirmed;
+    const labels = types.map(t => CERTIFICATES[t].label).join(", ");
+    showToast(`${name} added to ${labels}.${waiting ? " OHC waits for Emirates ID." : ""}`);
+  } catch (e) {
+    setSyncState("error"); err.textContent = `Could not save: ${e.message}`;
+  } finally { btn.disabled = false; }
+}
+
 function renderAll() {
+  ensureNewEmployeeButton();
   renderDeptFilterOptions(); renderDashboard();
   CERT_TYPES.forEach(renderSectionRows);
 }
@@ -1198,7 +1386,20 @@ function renderDeptFilterOptions() {
     el.value = depts.includes(cur) ? cur : "all";
   });
 }
+// Dashboard: "N awaiting Emirates ID" on any gated card, tap to open the waiting list
+function renderEidDashNotes() {
+  Object.keys((MARKET_CONFIG[MARKET] && MARKET_CONFIG[MARKET].gates) || {}).forEach(type => {
+    const h3 = document.querySelector(`#${type}Overview .panel-heading h3`); if (!h3) return;
+    let note = h3.querySelector(".eid-note");
+    const n = eidPending(type).length;
+    if (!note) { note = document.createElement("button"); note.type = "button"; note.className = "eid-note"; h3.appendChild(note);
+      note.addEventListener("click", ev => { ev.stopPropagation(); showView(type); renderSectionRows(type); }); }
+    note.textContent = `${n} awaiting Emirates ID`;
+    note.classList.toggle("hidden", n === 0);
+  });
+}
 function renderDashboard() {
+  renderEidDashNotes();
   const sums   = getCertSummaries();
   const by     = countBy(sums,"status");
   // Urgent by REAL status -- includes scheduled items so they show in the scheduled section below
@@ -1325,10 +1526,44 @@ function setEmployeeFormOpen(type, open) {
   }
 }
 
+// ── "Waiting for Emirates ID" panel (OHC) ─────────────────────────────────────
+function renderEidPanel(type, sfx) {
+  const register = document.getElementById(`staffRows${sfx}`)?.closest(".panel");
+  if (!register) return;
+  let panel = document.getElementById(`eidPending${sfx}`);
+  if (!isGated(type)) { if (panel) panel.remove(); return; }
+  const list = eidPending(type).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = `eidPending${sfx}`;
+    panel.className = "panel eid-panel";
+    register.parentElement.insertBefore(panel, register);
+    panel.addEventListener("click", async ev => {
+      const btn = ev.target.closest("[data-confirm-eid]"); if (!btn) return;
+      const emp = state.employees.find(x => x.id === btn.dataset.confirmEid);
+      if (!emp || !confirm(`${emp.name} has their Emirates ID?\n\nThey'll move into the OHC list as Missing.`)) return;
+      btn.disabled = true; setSyncState("syncing");
+      try { await confirmEid(emp.id, false); setSyncState("idle"); renderAll(); showToast(`${emp.name} moved to OHC.`); }
+      catch (err) { setSyncState("error"); btn.disabled = false; showToast(`Could not confirm: ${err.message}`); }
+    });
+  }
+  panel.classList.toggle("hidden", list.length === 0);
+  const can = canConfirmEid();
+  panel.innerHTML = `
+    <div class="panel-heading"><h3>Waiting for Emirates ID <span class="chip-count">${list.length}</span></h3>
+      <span class="muted">New joiners join OHC once ${can ? "you confirm" : "HSE confirms"} their Emirates ID.</span></div>
+    <div class="table-wrap"><table><thead><tr><th>Name</th><th>ID</th><th>Dept</th><th>Added</th><th></th></tr></thead><tbody>
+    ${list.map(e => `<tr><td><strong>${escHtml(e.name)}</strong></td><td>${escHtml(e.employeeId)}</td><td>${escHtml(e.department)}</td>
+      <td class="date-cell">${e.createdAt ? fmtDate(String(e.createdAt).slice(0, 10)) : "--"}</td>
+      <td>${can ? `<button class="secondary-btn eid-btn" type="button" data-confirm-eid="${e.id}">✓ Emirates ID received</button>` : `<span class="badge neutral">Waiting</span>`}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+
 function renderSectionRows(type) {
   const sfx  = SECTION_SUFFIX[type];
   // Section missing from index.html (e.g. app.js updated before index.html): skip it instead of blanking every list
   if (!sfx || !document.getElementById(`staffRows${sfx}`) || !document.getElementById(`employeeSearch${sfx}`)) return;
+  renderEidPanel(type, sfx);
   const q    = document.getElementById(`employeeSearch${sfx}`).value.trim().toLowerCase();
   const dept = document.getElementById(`employeeDepartmentFilter${sfx}`).value;
   const stat = document.getElementById(`employeeStatusFilter${sfx}`).value;
@@ -1491,6 +1726,13 @@ async function importFromCsv(text) {
       if (error) throw new Error("Certificate upsert failed: " + error.message);
     }
   }
+  // Anyone imported with an OHC issue date already has an Emirates ID
+  try {
+    const withOhc = allEntries.filter(x => x.certDates && x.certDates.ohc).map(x => empIdToDbId[x.empRow.employee_id.toLowerCase()]).filter(Boolean);
+    for (let i = 0; i < withOhc.length; i += 200) {
+      await sb.from("employees").update({ eid_confirmed: true, eid_confirmed_at: new Date().toISOString(), eid_confirmed_by: "auto: has OHC" }).in("id", withOhc.slice(i, i + 200));
+    }
+  } catch (e) { console.warn("eid confirm on import", e); }
   showProgressToast("Reloading data...", 90);
   await loadFromSupabase();
   setSyncState("idle");
