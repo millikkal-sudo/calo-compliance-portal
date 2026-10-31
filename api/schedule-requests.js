@@ -28,11 +28,12 @@ function requestBlocks({ id, emp, type, expiry, days, handover, now }) {
 }
 
 async function dmAll(users, text, blocks, who, out) {
-  const dms = [];
+  const dms = [], failed = [];
   for (const user of users) {
     try { const m = await slack("chat.postMessage", { channel: user, text, blocks }); dms.push({ user, channel: m.channel, ts: m.ts }); }
-    catch (e) { out.errors.push(`${who} -> ${user}: ${e.message}`); }
+    catch (e) { failed.push({ user, error: e.message, at: new Date().toISOString() }); out.errors.push(`${who} -> ${user}: ${e.message}`); }
   }
+  dms.failed = failed; // kept for the portal's Slack requests tab
   return dms;
 }
 
@@ -54,11 +55,17 @@ module.exports = async (req, res) => {
         t[m.tier === 2 ? 2 : 1].push(m.slack_user_id); tiers.set(k, t);
       }
       if (!tiers.size) continue; // market not switched on yet
-      const tierOf = dept => tiers.get((dept || "").trim().toLowerCase()) || { 1: [], 2: [] };
+      // "*" rows (e.g. HSE) are added to every department's list
+      const everyone = tiers.get("*") || { 1: [], 2: [] };
+      const tierOf = dept => {
+        const t = tiers.get((dept || "").trim().toLowerCase()) || { 1: [], 2: [] };
+        const merge = (a, b) => [...new Set([...a, ...b])];
+        return { 1: merge(t[1], everyone[1]), 2: merge(t[2], everyone[2]).filter(id => !merge(t[1], everyone[1]).includes(id)) };
+      };
 
       // ── 1. Move along open requests that waited 48h ───────────────────────────
       const cutoff = new Date(Date.now() - WAIT_MS).toISOString();
-      const open = await db(`schedule_requests?select=id,level,stage,expiry_date,dm_messages,certificate_id,certificates(type,issue_date,scheduled_date,employees(name,employee_id,department))&market=eq.${market}&status=eq.sent&level_at=lt.${cutoff}`);
+      const open = await db(`schedule_requests?select=id,level,stage,expiry_date,dm_messages,dm_failed,certificate_id,certificates(type,issue_date,scheduled_date,employees(name,employee_id,department))&market=eq.${market}&status=eq.sent&level_at=lt.${cutoff}`);
       for (const r of open) {
         const c = r.certificates || {}; const e = c.employees || {}; const label = CERT_LABELS[c.type] || (c.type || "").toUpperCase();
         const isNew = r.stage === "new";
@@ -84,7 +91,7 @@ module.exports = async (req, res) => {
               : requestBlocks({ id: r.id, emp: e, type: c.type, expiry: r.expiry_date, days: daysBetween(now, r.expiry_date), handover: true, now });
             const dms = await dmAll(backup, isNew ? `New joiner needs an OHC (passed to you): ${e.name}` : `Renewal date needed (passed to you): ${e.name} · ${(c.type || "").toUpperCase()}`, blocks, who, out);
             if (dms.length) {
-              await db(`schedule_requests?id=eq.${r.id}`, { method: "PATCH", body: { level: 2, level_at: new Date().toISOString(), dm_messages: [...(r.dm_messages || []), ...dms] } });
+              await db(`schedule_requests?id=eq.${r.id}`, { method: "PATCH", body: { level: 2, level_at: new Date().toISOString(), dm_messages: [...(r.dm_messages || []), ...dms], dm_failed: [...(r.dm_failed || []), ...dms.failed] } });
               out.passedToBackup.push(who); continue;
             }
           }
@@ -123,8 +130,8 @@ module.exports = async (req, res) => {
             body: { certificate_id: c.id, market, stage: "14", expiry_date: c.expiry_date, status: "sent", level } });
           const blocks = requestBlocks({ id: row.id, emp, type: c.type, expiry: c.expiry_date, days: daysBetween(now, c.expiry_date), handover: false, now });
           const dms = await dmAll(first, `Renewal date needed: ${emp.name} · ${c.type.toUpperCase()} expires ${fmt(c.expiry_date)}`, blocks, who, out);
+          await db(`schedule_requests?id=eq.${row.id}`, { method: "PATCH", body: { dm_messages: dms, dm_failed: dms.failed, slack_channel: dms[0] && dms[0].channel, slack_ts: dms[0] && dms[0].ts } });
           if (!dms.length) throw new Error("no manager could be messaged");
-          await db(`schedule_requests?id=eq.${row.id}`, { method: "PATCH", body: { dm_messages: dms, slack_channel: dms[0].channel, slack_ts: dms[0].ts } });
           out.firstAsk.push(who);
         } catch (e) { out.errors.push(`${who}: ${e.message}`); }
       }
