@@ -814,3 +814,12 @@ tr.bulk-selected-row > td { background:var(--fill-brand-light); }
 .ne-eid input { width:16px; height:16px; accent-color:var(--fill-brand-regular); }
 .ne-error { color:var(--content-text-error); font-size:13px; min-height:18px; }
 #newEmployeeTop { margin-right:8px; }
+
+/* Slack requests tracker */
+.dm-cell { white-space:normal; }
+.dm { display:inline-block; border-radius:var(--radius-full); padding:1px 9px; font:700 12px/18px var(--font); margin:2px 2px 2px 0; }
+.dm.ok { background:var(--fill-success-weak); color:var(--content-text-success); }
+.dm.fail { background:var(--fill-error-weak); color:var(--content-text-error); }
+#requests .section-heading { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+.eid-actions { white-space:nowrap; }
+.eid-actions .text-btn { margin-left:6px; }
