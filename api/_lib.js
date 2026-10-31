@@ -3,7 +3,7 @@ const SUPABASE_URL = "https://iflquskysqchhbywvmow.supabase.co";
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const CERT_LABELS = {
-  bfs: "BFS (Basic Food Safety)", ohc: "OHC (Occupational Health Card)", fsc: "Fire Safety Certificate", fac: "First Aid Certificate",
+  bfs: "BFS (Basic Food Safety)", ohc: "OHC (Occupational Health Card)", fsc: "Fire Safety Certificate", fac: "First Aid Certificate", pic: "PIC (Person In Charge)",
   fh: "Food Handler Certificate", fa: "First Aid Certificate", fs: "Fire Safety Certificate",
 };
 
