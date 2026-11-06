@@ -1,7 +1,7 @@
 // Slack Interactivity endpoint: handles the Submit / "Can't, needs HR" buttons in the manager DMs.
 // Slack app > Interactivity & Shortcuts > Request URL: https://calo-compliance-portal.vercel.app/api/slack-interact
 const crypto = require("crypto");
-const { db, postToThread, closeDms, fmt, fmtDay, CERT_LABELS } = require("./_lib");
+const { fmtTime, db, postToThread, closeDms, fmt, fmtDay, CERT_LABELS } = require("./_lib");
 // Slack needs an answer within 3 seconds, so we reply at once and finish the booking in the background
 let waitUntil = null;
 try { ({ waitUntil } = require("@vercel/functions")); } catch (e) { /* fall back to doing the work before replying */ }
@@ -25,7 +25,7 @@ module.exports = async (req, res) => {
   if (!verified(req, raw)) { console.error("slack-interact: bad or missing signature (check SLACK_SIGNING_SECRET)"); return res.status(401).send("Invalid signature"); }
   const p = JSON.parse(new URLSearchParams(raw).get("payload") || "{}");
   const action = p.type === "block_actions" && p.actions && p.actions[0];
-  if (!action || action.action_id === "book_date") return res.status(200).end(); // picking from the list needs no reply
+  if (!action || action.action_id === "book_date" || action.action_id === "book_time") return res.status(200).end(); // picking from the list needs no reply
 
   const work = handle(p, action).catch(err => console.error("slack-interact:", err));
   if (waitUntil) { waitUntil(work); return res.status(200).end(); }
@@ -48,23 +48,24 @@ async function handle(p, action) {
 
     if (action.action_id === "book_submit") {
       const date = p.state?.values?.book?.book_date?.selected_option?.value;
-      if (!date) {
-        await reply(p.response_url, { response_type: "ephemeral", replace_original: false, text: "Pick a date from the list first, then tap Submit." });
+      const time = p.state?.values?.book?.book_time?.selected_option?.value;
+      if (!date || !time) {
+        await reply(p.response_url, { response_type: "ephemeral", replace_original: false, text: `Pick ${!date && !time ? "a date and a time" : !date ? "a date" : "a time"} first, then tap Submit.` });
         return;
       }
       // Claim it first so two managers pressing Submit at once can't both book
       const claimed = await db(sameCycle, { method: "PATCH", prefer: "return=representation",
-        body: { status: "booked", booked_date: date, responded_by: p.user?.id, responded_at: nowIso } });
+        body: { status: "booked", booked_date: date, booked_time: time, responded_by: p.user?.id, responded_at: nowIso } });
       if (!claimed.length) { await reply(p.response_url, done(`Already handled by someone else: *${e.name}* · ${label}.`)); return; }
       await db(`certificates?id=eq.${r.certificate_id}`, { method: "PATCH", body: {
-        scheduled_date: date, schedule_note: `${isNew ? "OHC appointment set" : "Booked"} via Slack by ${p.user?.name || p.user?.username || p.user?.id}`, updated_at: nowIso } });
+        scheduled_date: date, scheduled_time: time, schedule_note: `${isNew ? "OHC appointment set" : "Booked"} via Slack by ${p.user?.name || p.user?.username || p.user?.id}`, updated_at: nowIso } });
       await postToThread(r.market, isNew
-        ? `🆕 *New joiner OHC: please prepare the application form and book* · *${e.name}* (${e.employee_id}, ${e.department}) · appointment *${fmtDay(date)} ${date.slice(0, 4)}* · scheduled by ${picker}`
-        : `✅ *Please book:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · *${fmtDay(date)} ${date.slice(0, 4)}* · expires ${fmt(r.expiry_date)} · scheduled by ${picker}`, type);
+        ? `🆕 *New joiner OHC: please prepare the application form and book* · *${e.name}* (${e.employee_id}, ${e.department}) · appointment *${fmtDay(date)} ${date.slice(0, 4)}, ${fmtTime(time)}* · scheduled by ${picker}`
+        : `✅ *Please book:* *${e.name}* (${e.employee_id}, ${e.department}) · ${label} · *${fmtDay(date)} ${date.slice(0, 4)}, ${fmtTime(time)}* · expires ${fmt(r.expiry_date)} · scheduled by ${picker}`, type);
       await reply(p.response_url, done(isNew
-        ? `✅ *OHC appointment set:* *${e.name}* on *${fmtDay(date)}*.\nHR will prepare the application form.`
-        : `✅ *Booked:* *${e.name}* · ${label} on *${fmtDay(date)}*.\nHR has it, and the portal now shows Scheduled.`));
-      await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `✅ Scheduled by ${picker}: *${e.name}* · ${label} on *${fmtDay(date)}*. Nothing to do.`);
+        ? `✅ *OHC appointment set:* *${e.name}* on *${fmtDay(date)}, ${fmtTime(time)}*.\nHR will prepare the application form.`
+        : `✅ *Booked:* *${e.name}* · ${label} on *${fmtDay(date)}, ${fmtTime(time)}*.\nHR has it, and the portal now shows Scheduled.`));
+      await closeDms(claimed.map(x => x.dm_messages), p.message?.ts, `✅ Scheduled by ${picker}: *${e.name}* · ${label} on *${fmtDay(date)}, ${fmtTime(time)}*. Nothing to do.`);
     } else if (action.action_id === "book_decline") {
       const claimed = await db(sameCycle, { method: "PATCH", prefer: "return=representation",
         body: { status: "declined", responded_by: p.user?.id, responded_at: nowIso } });
