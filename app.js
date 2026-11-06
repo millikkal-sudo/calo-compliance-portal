@@ -179,7 +179,8 @@ async function loadFromSupabase() {
     } catch (e) { state.departments = null; }
     const [{ data: emps, error: e1 }, { data: certs, error: e2 }, { data: cfg }, { data: slots }] = await Promise.all([
       sb.from("employees").select("*").eq("market", MARKET).order("created_at", { ascending: false }),
-      sb.from("certificates").select("id,employee_id,type,issue_date,expiry_date,file_name,file_path,scheduled_date,schedule_note").eq("market", MARKET),
+      sb.from("certificates").select("id,employee_id,type,issue_date,expiry_date,file_name,file_path,scheduled_date,schedule_note,scheduled_time").eq("market", MARKET)
+        .then(r => r.error ? sb.from("certificates").select("id,employee_id,type,issue_date,expiry_date,file_name,file_path,scheduled_date,schedule_note").eq("market", MARKET) : (state.hasSchedTime = true, r)),
       sb.from("settings").select("*").eq("market", MARKET).single(),
       sb.from("schedule_slots").select("*").eq("market", MARKET).order("slot_date", { ascending: true }),
     ]);
@@ -198,7 +199,7 @@ async function loadFromSupabase() {
       allTypes.forEach(t => {
         const c = ec.find(x => x.type === t) || {};
         certificates[t] = c.id ? { issueDate: c.issue_date||"", expiryDate: c.expiry_date||"",
-                                   scheduledDate: c.scheduled_date||"", scheduleNote: c.schedule_note||"",
+                                   scheduledDate: c.scheduled_date||"", scheduleNote: c.schedule_note||"", scheduledTime: c.scheduled_time||"",
                                    file: c.file_name ? { name: c.file_name, filePath: c.file_path, dataUrl: null } : null } : {};
         _certIds[t] = c.id || null;
       });
@@ -304,6 +305,7 @@ async function upsertCertificate(empStateId, type, cert, existingCertId) {
     file_name:      cert.file?.name     || null,
     file_path:      cert.file?.filePath || null,
     scheduled_date: cert.scheduledDate || null,
+    ...(state.hasSchedTime ? { scheduled_time: cert.scheduledTime || null } : {}),
     schedule_note:  cert.scheduleNote  || null,
     updated_at:     new Date().toISOString(),
   };
@@ -571,7 +573,7 @@ document.addEventListener("DOMContentLoaded", function() {
           const cert = emp.certificates[type] || {};
           const s    = getCertSummary(emp, type);
           if (s.status === "Valid") continue; // skip valid certs
-          const updated = { ...cert, scheduledDate: date, scheduleNote: note };
+          const updated = { ...cert, scheduledDate: date, scheduleNote: note, scheduledTime: "" };
           emp.certificates[type] = updated;
           await upsertCertificate(empId, type, updated, emp._certIds?.[type]);
           saved++;
@@ -605,7 +607,7 @@ document.addEventListener("DOMContentLoaded", function() {
         for (const type of CERT_TYPES) {
           const cert = emp.certificates[type];
           if (!cert || !cert.scheduledDate) continue;
-          const updated = { ...cert, scheduledDate: "", scheduleNote: "" };
+          const updated = { ...cert, scheduledDate: "", scheduleNote: "", scheduledTime: "" };
           emp.certificates[type] = updated;
           await upsertCertificate(empId, type, updated, emp._certIds?.[type]);
         }
@@ -706,7 +708,7 @@ scheduleModalForm.addEventListener("submit", async e => {
     }
   }
 
-  const certData = { ...prev, scheduledDate: chosenDate, scheduleNote: d.scheduleNote || "" };
+  const certData = { ...prev, scheduledDate: chosenDate, scheduleNote: d.scheduleNote || "", scheduledTime: "" };
   emp.certificates[type] = certData;
   setSyncState("syncing");
   try {
@@ -725,7 +727,7 @@ document.getElementById("scheduleModalClear").addEventListener("click", async ()
   const emp   = state.employees.find(x => x.id === empId); if (!emp) return;
   if (!confirm("Clear the scheduled renewal date?")) return;
   const prev = emp.certificates[type] || {};
-  const certData = { ...prev, scheduledDate: "", scheduleNote: "" };
+  const certData = { ...prev, scheduledDate: "", scheduleNote: "", scheduledTime: "" };
   emp.certificates[type] = certData;
   setSyncState("syncing");
   try {
@@ -1426,7 +1428,7 @@ async function loadSlackRequests(force) {
   try {
     const [{ data: reqs, error: e1 }, { data: mgrs }] = await Promise.all([
       sb.from("schedule_requests")
-        .select("id,stage,status,level,expiry_date,booked_date,responded_by,sent_at,responded_at,level_at,note,dm_messages,dm_failed,certificates(type,employees(name,employee_id,department))")
+        .select("id,stage,status,level,expiry_date,booked_date,booked_time,responded_by,sent_at,responded_at,level_at,note,dm_messages,dm_failed,certificates(type,employees(name,employee_id,department))")
         .eq("market", MARKET).order("sent_at", { ascending: false }).limit(300),
       sb.from("dept_managers").select("slack_user_id,manager_name").eq("market", MARKET),
     ]);
@@ -1467,7 +1469,7 @@ function renderSlackRequests() {
       .concat((r.dm_failed || []).map(d => `<span class="dm fail" title="${escHtml(d.error || "")}">✗ ${who(d.user)}</span>`)).join(" ");
     const stage = r.status === "sent" ? (r.level === 2 ? "Backup" : "Leads") : r.status === "escalated" || r.status === "declined" ? "HR" : r.level === 2 ? "Backup" : "Leads";
     let status;
-    if (r.status === "booked") status = r.booked_date ? `<span class="badge good">Booked ${fmtDate(r.booked_date)}</span> <small class="muted">by ${who(r.responded_by) || "portal"}</small>` : `<span class="badge good">Done</span> <small class="muted">${escHtml(r.note || "")}</small>`;
+    if (r.status === "booked") status = r.booked_date ? `<span class="badge good">Booked ${fmtDate(r.booked_date)}${r.booked_time ? " · " + fmtTime12(r.booked_time) : ""}</span> <small class="muted">by ${who(r.responded_by) || "portal"}</small>` : `<span class="badge good">Done</span> <small class="muted">${escHtml(r.note || "")}</small>`;
     else if (r.status === "declined") status = `<span class="badge bad">Can't schedule → HR</span> <small class="muted">${who(r.responded_by)}</small>`;
     else if (r.status === "escalated") status = `<span class="badge bad">With HR</span> <small class="muted">${escHtml(r.note === "no manager mapped" ? "no manager set" : "no reply in time")}</small>`;
     else { const hrs = Math.floor((Date.now() - new Date(r.level_at || r.sent_at)) / 36e5); status = `<span class="badge watch">Waiting</span> <small class="muted">${hrs < 1 ? "just sent" : hrs + "h, moves on at 48h"}</small>`; }
@@ -1591,7 +1593,7 @@ function renderDashboard() {
       <td>${escHtml(s.emp.name)}<br><small>${escHtml(s.emp.employeeId)}</small></td>
       <td>${escHtml(s.cert.label)}</td>
       <td>${fmtDate(s.expiryDate)}</td>
-      <td>${badge(s.status, s.scheduledDate)}</td>
+      <td>${badge(s.status, s.scheduledDate, s.record && s.record.scheduledTime)}</td>
       <td><span class="schedule-note-inline">${s.scheduleNote ? escHtml(s.scheduleNote) : "--"}</span></td>
     </tr>`),
   ];
@@ -1801,7 +1803,7 @@ function renderSectionRows(type) {
       ${checkCell}
       <td><strong>${escHtml(e.name)}</strong></td><td>${escHtml(e.employeeId)}</td><td>${escHtml(e.department)}</td>
       <td>
-        ${isEditor?`<button class="cert-status-btn" data-action="edit-cert" data-eid="${e.id}" data-type="${type}">${badge(s.status,s.scheduledDate)}</button>`:badge(s.status,s.scheduledDate)}
+        ${isEditor?`<button class="cert-status-btn" data-action="edit-cert" data-eid="${e.id}" data-type="${type}">${badge(s.status,s.scheduledDate,s.record&&s.record.scheduledTime)}</button>`:badge(s.status,s.scheduledDate,s.record&&s.record.scheduledTime)}
         ${scheduleBtn}
       </td>
       <td class="date-cell">${fmtDate(s.issueDate)}</td><td class="expiry-cell">${fmtDate(s.expiryDate)}${expiryHint(s.expiryDate)}</td>
@@ -2020,8 +2022,10 @@ function createEmptyCertificates(){return Object.fromEntries(CERT_TYPES.map(t=>[
 function formData(form){return Object.fromEntries(new FormData(form).entries());}
 function setRows(id,rows,cols,empty){document.getElementById(id).innerHTML=rows.length?rows.join(""):`<tr><td colspan="${cols}" class="empty-state">${empty}</td></tr>`;}
 function countBy(arr,key){return arr.reduce((c,i)=>{c[i[key]]=(c[i[key]]||0)+1;return c;},{});}
-function badge(status, scheduledDate=""){
-  if(status==="Scheduled") return`<span class="badge scheduled" title="Scheduled for ${fmtDate(scheduledDate)}">📅 ${fmtDate(scheduledDate)}</span>`;
+function fmtTime12(t){ if(!t) return ""; const [h,m]=t.split(":").map(Number); return `${((h+11)%12)+1}:${String(m).padStart(2,"0")} ${h<12?"AM":"PM"}`; }
+function badge(status, scheduledDate="", scheduledTime=""){
+  const at = scheduledTime ? ` · ${fmtTime12(scheduledTime)}` : "";
+  if(status==="Scheduled") return`<span class="badge scheduled" title="Scheduled for ${fmtDate(scheduledDate)}${at}">📅 ${fmtDate(scheduledDate)}${at}</span>`;
   const cls=status==="Valid"?"good":status==="Expiring in 90 Days"?"watch":status==="Expiring in 30 Days"?"warn":status==="Missing"?"neutral":"bad";
   // Plain words people act on; the exact days sit under the expiry date
   const label=status==="Expiring in 30 Days"?"Renew now":status==="Expiring in 90 Days"?"Renew soon":status;
