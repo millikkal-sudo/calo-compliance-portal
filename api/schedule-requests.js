@@ -5,7 +5,7 @@
 //   HR gets it in the monthly thread.
 // Everyone who has the DM can still answer until someone does; first answer wins.
 // Test in a browser: /api/schedule-requests?key=CRON_SECRET&dry=1  -> lists what would happen, sends nothing
-const { db, slack, postToThread, closeDms, newOhcBlocks, startNewOhcRequest, today, addDays, daysBetween, fmt, fmtDay, CERT_LABELS } = require("./_lib");
+const { timeSelect, db, slack, postToThread, closeDms, newOhcBlocks, startNewOhcRequest, today, addDays, daysBetween, fmt, fmtDay, CERT_LABELS } = require("./_lib");
 const WAIT_MS = 46 * 3600e3; // "48 hours" measured between two 9am runs, with slack for timing drift
 
 function requestBlocks({ id, emp, type, expiry, days, handover, now }) {
@@ -17,9 +17,10 @@ function requestBlocks({ id, emp, type, expiry, days, handover, now }) {
   const lead = handover ? "⏰ *Passed to you* · no reply from the first managers in 48 hours\n" : "";
   return [
     { type: "section", text: { type: "mrkdwn", text:
-      `${lead}*${emp.name}* (${emp.employee_id}, ${emp.department})\n${CERT_LABELS[type] || type.toUpperCase()} ${when}.\nPick a renewal date and HR will book it.` } },
+      `${lead}*${emp.name}* (${emp.employee_id}, ${emp.department})\n${CERT_LABELS[type] || type.toUpperCase()} ${when}.\nPick a renewal date and time and HR will book it.` } },
     { type: "actions", block_id: "book", elements: [
       { type: "static_select", action_id: "book_date", placeholder: { type: "plain_text", text: "Choose a date" }, options },
+      timeSelect(),
       { type: "button", action_id: "book_submit", style: "primary", text: { type: "plain_text", text: "Submit" }, value: id },
       { type: "button", action_id: "book_decline", text: { type: "plain_text", text: "Can't, needs HR" }, value: id },
     ] },
