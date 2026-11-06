@@ -110,9 +110,10 @@ function newOhcBlocks({ id, emp, handover, now }) {
   const lead = handover ? "⏰ *Passed to you* · no reply from the first managers in 48 hours\n" : "";
   return [
     { type: "section", text: { type: "mrkdwn", text:
-      `${lead}🆕 *New joiner needs an OHC* · Emirates ID received\n*${emp.name}* (${emp.employee_id}, ${emp.department})\nPick a date in the next two weeks for the OHC appointment. HR will prepare the application form.` } },
+      `${lead}🆕 *New joiner needs an OHC* · Emirates ID received\n*${emp.name}* (${emp.employee_id}, ${emp.department})\nPick a date and time in the next two weeks for the OHC appointment. HR will prepare the application form.` } },
     { type: "actions", block_id: "book", elements: [
       { type: "static_select", action_id: "book_date", placeholder: { type: "plain_text", text: "Choose a date" }, options },
+      timeSelect(),
       { type: "button", action_id: "book_submit", style: "primary", text: { type: "plain_text", text: "Submit" }, value: id },
       { type: "button", action_id: "book_decline", text: { type: "plain_text", text: "Can't, needs HR" }, value: id },
     ] },
@@ -141,4 +142,20 @@ async function startNewOhcRequest({ market, emp, certId }) {
   return `sent to ${dms.length} manager${dms.length === 1 ? "" : "s"}`;
 }
 
-module.exports = { managersFor, dmUsers, newOhcBlocks, startNewOhcRequest, db, slack, postToThread, closeDms, today, addDays, daysBetween, fmt, fmtDay, CERT_LABELS };
+// 7:00 AM to 6:00 PM every 30 minutes (value "HH:MM", label "9:30 AM")
+function fmtTime(hhmm) {
+  if (!hhmm) return "";
+  const [h, m] = hhmm.split(":").map(Number);
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
+const TIME_OPTIONS = (() => {
+  const out = [];
+  for (let mins = 7 * 60; mins <= 18 * 60; mins += 30) {
+    const v = `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
+    out.push({ text: { type: "plain_text", text: fmtTime(v) }, value: v });
+  }
+  return out;
+})();
+const timeSelect = () => ({ type: "static_select", action_id: "book_time", placeholder: { type: "plain_text", text: "Choose a time" }, options: TIME_OPTIONS });
+
+module.exports = { fmtTime, TIME_OPTIONS, timeSelect, managersFor, dmUsers, newOhcBlocks, startNewOhcRequest, db, slack, postToThread, closeDms, today, addDays, daysBetween, fmt, fmtDay, CERT_LABELS };
