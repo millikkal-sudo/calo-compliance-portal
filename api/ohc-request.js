@@ -3,7 +3,7 @@
 // Security: the caller must send their portal login token, and be allowed to confirm Emirates IDs.
 const { db, startNewOhcRequest } = require("./_lib");
 const SUPABASE_URL = "https://iflquskysqchhbywvmow.supabase.co";
-const CONFIRMERS = (process.env.EID_CONFIRMERS || "m.illikkal@calo.app").split(",").map(s => s.trim().toLowerCase());
+const CONFIRMERS = (process.env.EID_CONFIRMERS || "m.illikkal@calo.app,j.swamy@calo.app").split(",").map(s => s.trim().toLowerCase());
 
 module.exports = async (req, res) => {
   if (req.method !== "POST") return res.status(405).send("Method not allowed");
