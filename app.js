@@ -52,7 +52,7 @@ function empBelongsInSection(emp, type) {
 let MARKET = null, CERTIFICATES = {}, CERT_TYPES = [], SECTION_SUFFIX = {}, LINKED_TYPES = [], UNIVERSAL_TYPES = [];
 const EDITOR_EMAILS = [];
 // Only these people can confirm a new joiner's Emirates ID (moves them into OHC)
-const EID_CONFIRMERS = ["m.illikkal@calo.app"];
+const EID_CONFIRMERS = ["m.illikkal@calo.app", "j.swamy@calo.app"];
 const canConfirmEid = () => Boolean(session && EID_CONFIRMERS.includes((session.email || "").toLowerCase()));
 const isGated = (type) => Boolean(MARKET_CONFIG[MARKET] && MARKET_CONFIG[MARKET].gates && MARKET_CONFIG[MARKET].gates[type]);
 const OPS_EMAILS    = [];
